@@ -13,9 +13,16 @@ from app.models.gym import Gym
 from app.models.user import User
 from app.models.activity_log import ActivityLog
 from app.models.user_permission import UserPermission
+from app.models.attendance import Attendance
+from app.models.gym_class import GymClass, ClassBooking
+from app.models.inquiry import Inquiry, FollowUp
+from app.models.member import Member, MembershipPlan
+from app.models.payment import Payment
+from app.models.platform_plan import PlatformPlan
 from app.routers import auth, members, users, attendance, payments, dashboard, churn, classes, notifications, billing, web
 
 Base.metadata.create_all(bind=engine)
+print(f"Database schema check: {len(Base.metadata.tables)} tables registered")
 
 
 def ensure_payment_columns() -> None:
