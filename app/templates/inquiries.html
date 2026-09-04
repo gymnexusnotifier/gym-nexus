@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-header">
+  <h1>Inquiries</h1>
+  <p class="page-sub">Leads & follow-ups</p>
+</header>
+
+<section class="panel">
+  <div class="section-header-row">
+    <h2>Quick intake</h2>
+    <span class="tag ai-tag">front desk</span>
+  </div>
+  <form method="post" action="/app/inquiries" class="form-grid">
+    <label>
+      Full name
+      <input type="text" name="name" placeholder="e.g. Rohan Mehta" required>
+    </label>
+    <label>
+      Phone
+      <input type="text" name="contact" placeholder="(optional)">
+    </label>
+    <label>
+      Email
+      <input type="email" name="email" placeholder="(optional)">
+    </label>
+    <label>
+      Source
+      <select name="source">
+        <option value="walk-in">Walk-in</option>
+        <option value="phone">Phone</option>
+        <option value="referral">Referral</option>
+        <option value="social">Social</option>
+        <option value="other">Other</option>
+      </select>
+    </label>
+    <label>
+      Interested plan
+      <input class="lookup-input" list="inquiry-plans" data-target="inquiry-plan-id" placeholder="Type plan (optional)">
+      <input type="hidden" name="plan_id" id="inquiry-plan-id">
+      <datalist id="inquiry-plans">{% for plan in plans %}<option value="{{ plan.name }}" data-id="{{ plan.id }}"></option>{% endfor %}</datalist>
+    </label>
+    <label>
+      Next follow-up
+      <input type="date" name="next_followup">
+    </label>
+    <div class="full-span" style="display:flex;justify-content:flex-start;align-items:center;">
+      <button type="submit">Add inquiry</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="section-header-row">
+    <h2>All inquiries</h2>
+    <span class="tag">lead pipeline</span>
+  </div>
+  <table class="data-table">
+    <thead><tr><th>Name</th><th>Contact</th><th>Plan</th><th>Next follow-up</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for iq in inquiries %}
+        <tr class="{% if iq.next_followup and iq.next_followup < now_date %}overdue-row{% endif %}">
+          <td><a href="/app/inquiries/{{ iq.id }}" class="table-link">{{ iq.name }}</a></td>
+          <td>{{ iq.contact or '—' }}</td>
+          <td>{{ iq.plan_name or '—' }}</td>
+          <td class="mono">{{ iq.next_followup or '—' }}</td>
+          <td><span class="status-pill status-{{ iq.status.value }}">{{ iq.status.value }}</span></td>
+          <td>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <a href="/app/inquiries/{{ iq.id }}" class="table-link">Open</a>
+              <form method="post" action="/app/inquiries/{{ iq.id }}/send-reminder" style="margin:0;">
+                <button type="submit" class="secondary-button" style="padding:6px 10px; font-size:12px;">Send reminder</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="empty">No inquiries yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

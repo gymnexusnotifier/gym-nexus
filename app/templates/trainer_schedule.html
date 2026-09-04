@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-header">
+  <h1>My Schedule</h1>
+  <p class="page-sub">{{ gym_name }}</p>
+</header>
+
+<section class="panel">
+  <table class="data-table">
+    <thead><tr><th>Class</th><th>Day</th><th>Time</th><th>Duration</th><th>Booked</th></tr></thead>
+    <tbody>
+      {% for c in classes %}
+        <tr>
+          <td>{{ c.name }}</td>
+          <td>{{ c.day }}</td>
+          <td class="mono">{{ c.time }}</td>
+          <td class="mono">{{ c.duration }} min</td>
+          <td class="mono">{{ c.booked }}/{{ c.capacity }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="empty">No classes assigned to you yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

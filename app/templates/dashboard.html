@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-header">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;">
+    <div><h1>AI Insights</h1><p class="page-sub">{{ gym_name }} &middot; decision support for your next move</p></div>
+    <a href="/app/dashboard/report" class="receipt-link">Download report</a>
+  </div>
+</header>
+
+<section class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">Today's check-ins</div>
+    <div class="stat-value mono">{{ today_checkins }}</div>
+    <svg class="pulse" viewBox="0 0 120 24" preserveAspectRatio="none">
+      <polyline points="0,12 20,12 26,4 32,20 38,2 44,12 120,12" />
+    </svg>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Currently in gym</div>
+    <div class="stat-value mono">{{ currently_in_gym }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Active members</div>
+    <div class="stat-value mono">{{ active_members }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Expired members</div>
+    <div class="stat-value mono">{{ expired_members }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Follow-ups due</div>
+    <div class="stat-value mono">{{ followups_due_today|default(0) }}</div>
+    <div class="stat-sub" style="margin-top:8px;color:var(--ink-soft);font-size:13px;">Open the <a href="/app/inquiries" style="color:var(--accent);">Inquiries</a> panel to manage</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Revenue this month</div>
+    <div class="stat-value mono">Rs. {{ "%.0f"|format(monthly_revenue) }}</div>
+  </div>
+</section>
+
+<section class="panels">
+  <div class="panel">
+    <h2>Traffic by time <span class="tag">last 30 days</span></h2>
+    {% if peak_hours %}
+      <div class="bar-chart">
+        {% for entry in peak_hours %}
+          <div class="bar-col">
+            <div class="bar" style="height: {{ entry.pct }}%"></div>
+            <div class="bar-label mono">{{ entry.hour }}h</div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="empty">No check-ins recorded yet.</p>
+    {% endif %}
+    <div class="insight-strip" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:18px;">
+      <div><div class="stat-label">Busiest hour</div><strong>{{ busiest_hour if busiest_hour is not none else '—' }}{% if busiest_hour is not none %}:00{% endif %}</strong></div>
+      <div><div class="stat-label">Quietest active hour</div><strong>{{ quietest_hour if quietest_hour is not none else '—' }}{% if quietest_hour is not none %}:00{% endif %}</strong></div>
+      <div><div class="stat-label">Avg. visit</div><strong>{% if average_visit_minutes is not none %}{{ average_visit_minutes }} min{% else %}—{% endif %}</strong></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>At-risk members <span class="tag ai-tag">AI insight</span></h2>
+    {% if at_risk %}
+      <ul class="risk-list">
+        {% for m in at_risk %}
+          <li>
+            <span class="risk-pill risk-{{ m.level }}">{{ m.level }}</span>
+            <div>
+              <div class="risk-name">{{ m.name }}</div>
+              <div class="risk-reason">{{ m.reason }}</div>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="empty">No members currently flagged at risk.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="panel">
+  <h2>AI operations pulse <span class="tag ai-tag">AI insight</span></h2>
+  <p class="empty">{{ ai_snapshot.summary }}</p>
+  <ul class="risk-list">
+    <li>
+      <span class="risk-pill risk-medium">{{ ai_snapshot.attendance_health }}</span>
+      <div>
+        <div class="risk-name">Attendance health</div>
+        <div class="risk-reason">{{ ai_snapshot.today_checkins }} check-ins today · peak hour {{ ai_snapshot.peak_hour if ai_snapshot.peak_hour is not none else 'n/a' }}</div>
+      </div>
+    </li>
+  </ul>
+  <div style="margin-top: 16px;">
+    {% for action in ai_snapshot.actions %}
+      <div class="empty" style="margin-bottom: 6px;">• {{ action }}</div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panels">
+  <div class="panel">
+    <h2>Business signals <span class="tag ai-tag">30-day view</span></h2>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">Avg. daily check-ins</div><div class="stat-value mono">{{ ai_metrics.average_daily_checkins }}</div></div>
+      <div class="stat-card"><div class="stat-label">Attendance records</div><div class="stat-value mono">{{ ai_metrics.attendance_30_days }}</div></div>
+      <div class="stat-card"><div class="stat-label">Revenue / active member</div><div class="stat-value mono">Rs. {{ "%.0f"|format(ai_metrics.revenue_per_active_member) }}</div></div>
+      <div class="stat-card"><div class="stat-label">Renewals next 30 days</div><div class="stat-value mono">{{ ai_metrics.renewal_pipeline }}</div></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Growth opportunities <span class="tag">recommended actions</span></h2>
+    <ul class="risk-list">
+      <li><span class="risk-pill risk-medium">{{ ai_metrics.conversion_rate }}%</span><div><div class="risk-name">Lead conversion</div><div class="risk-reason">{{ ai_metrics.conversion_candidates }} total inquiries. Follow up with open leads to improve conversion.</div></div></li>
+      <li><span class="risk-pill risk-medium">{{ ai_metrics.frozen_members }}</span><div><div class="risk-name">Frozen members</div><div class="risk-reason">Reach out with a restart offer before inactive memberships become churn.</div></div></li>
+      <li><span class="risk-pill risk-medium">{% if ai_metrics.revenue_change is not none %}{{ ai_metrics.revenue_change }}%{% else %}New{% endif %}</span><div><div class="risk-name">Revenue trend</div><div class="risk-reason">Compare current-month revenue with the previous month and review renewals due soon.</div></div></li>
+    </ul>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Plan adoption <span class="tag ai-tag">member analytics</span></h2>
+  {% if plan_summary %}
+    <ul class="risk-list">
+      {% for plan in plan_summary %}
+        <li>
+          <span class="risk-pill risk-medium">{{ plan.member_count }}</span>
+          <div>
+            <div class="risk-name">{{ plan.name }}</div>
+            <div class="risk-reason">Members enrolled on this plan</div>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="empty">No plans have been assigned to members yet.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Today's follow-ups <span class="tag">actions</span></h2>
+  {% if due_inquiries and due_inquiries|length > 0 %}
+    <ul class="risk-list">
+      {% for iq in due_inquiries %}
+        <li style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="flex:1">
+            <div class="risk-name"><a href="/app/inquiries/{{ iq.id }}" style="color:var(--accent);">{{ iq.name }}</a></div>
+            <div class="risk-reason">Follow-up: {{ iq.next_followup }} {% if iq.assigned %}· assigned to {{ iq.assigned }}{% endif %}</div>
+          </div>
+          <div style="margin-left:12px;"><a href="/app/inquiries/{{ iq.id }}" class="receipt-link">Open</a></div>
+        </li>
+      {% endfor %}
+    </ul>
+    {% if due_inquiries|length == 0 %}
+      <p class="empty">No follow-ups scheduled for today.</p>
+    {% endif %}
+  {% else %}
+    <p class="empty">No follow-ups scheduled for today. You can add new inquiries from the <a href="/app/inquiries" style="color:var(--accent);">Inquiries</a> page.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Face check-in <span class="tag ai-tag">quick access</span></h2>
+  {% if not face_recognition_available %}
+    <p class="empty">Face recognition is in manual fallback mode in this deployment. Use the camera-triggered scanner when the native engine is available, or the manual attendance entry below.</p>
+  {% else %}
+    <p class="empty">Open the attendance scanner to mark members in or out using the camera.</p>
+  {% endif %}
+  <a href="/app/attendance#scanner-video" class="receipt-link">Open face scanner</a>
+</section>
+{% endblock %}

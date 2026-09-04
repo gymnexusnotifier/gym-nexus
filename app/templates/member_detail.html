@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-header">
+  <h1>{{ member.name }}</h1>
+  <p class="page-sub">{{ gym_name }} &middot; Member since {{ member.join_date }}</p>
+</header>
+
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+
+<section class="panels">
+  <div class="panel">
+    <h2>Details</h2>
+    <form method="post" action="/app/members/{{ member.id }}" class="detail-form">
+      <label>Name
+        <input type="text" name="name" value="{{ member.name }}" required>
+      </label>
+      <label>Contact
+        <input type="text" name="contact" value="{{ member.contact or '' }}">
+      </label>
+      <label>Email
+        <input type="email" name="email" value="{{ member.email or '' }}">
+      </label>
+      <label>Membership plan
+        <input class="lookup-input" list="member-detail-plans" data-target="member-detail-plan-id" placeholder="Type plan (optional)" value="{% for plan in plans %}{% if member.plan_id|string == plan.id|string %}{{ plan.name }}{% endif %}{% endfor %}">
+        <input type="hidden" name="plan_id" id="member-detail-plan-id" value="{{ member.plan_id or '' }}">
+        <datalist id="member-detail-plans">{% for plan in plans %}<option value="{{ plan.name }}" data-id="{{ plan.id }}"></option>{% endfor %}</datalist>
+      </label>
+      <label>Status
+        <select name="status">
+          <option value="active" {{ "selected" if member.status.value == "active" else "" }}>Active</option>
+          <option value="frozen" {{ "selected" if member.status.value == "frozen" else "" }}>Frozen</option>
+          <option value="expired" {{ "selected" if member.status.value == "expired" else "" }}>Expired</option>
+        </select>
+      </label>
+      <button type="submit">Save changes</button>
+    </form>
+
+    {% if user_role == "gym_owner" %}
+    <form method="post" action="/app/members/{{ member.id }}/delete" class="delete-form" onsubmit="return confirm('Delete this member permanently?');">
+      <button type="submit" class="danger-button">Delete member</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>AI churn risk <span class="tag ai-tag">AI insight</span></h2>
+    <span class="risk-pill risk-{{ churn.risk_level }}">{{ churn.risk_level }}</span>
+    <p class="risk-reason">{{ churn.reason }}</p>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Photo <span class="tag ai-tag">used for face-recognition check-in</span></h2>
+  {% if has_photo %}
+    <img src="/app/members/{{ member.id }}/photo" alt="{{ member.name }}" class="member-photo">
+  {% else %}
+    <p class="empty">No photo uploaded yet. Without one, this member can't be recognized by the kiosk camera.</p>
+  {% endif %}
+  <form method="post" action="/app/members/{{ member.id }}/photo" enctype="multipart/form-data" class="inline-form" style="margin-top: 14px;">
+    <input type="file" name="photo" accept="image/*" required>
+    <button type="submit">{{ "Replace photo" if has_photo else "Upload photo" }}</button>
+  </form>
+</section>
+
+<section class="panels">
+  <div class="panel">
+    <h2>Attendance history</h2>
+    {% if attendance %}
+      <table class="data-table">
+        <thead><tr><th>Date</th><th>Check-in</th><th>Check-out</th></tr></thead>
+        <tbody>
+          {% for a in attendance %}
+            <tr><td class="mono">{{ a.date }}</td><td class="mono">{{ a.check_in }}</td><td class="mono">{{ a.check_out or "—" }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty">No check-ins recorded yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="panel">
+    <h2>Payment history</h2>
+    {% if payments %}
+      <table class="data-table">
+        <thead><tr><th>Date</th><th>Plan</th><th>Amount</th><th>Receipt</th></tr></thead>
+        <tbody>
+          {% for p in payments %}
+            <tr>
+              <td class="mono">{{ p.date }}</td>
+              <td>{{ p.plan }}</td>
+              <td class="mono">Rs. {{ "%.2f"|format(p.amount|float) }}</td>
+              <td><a class="receipt-link" href="/app/payments/{{ p.id }}/receipt">PDF</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p class="empty">No payments logged yet.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-header">
+  <h1>Members</h1>
+  <p class="page-sub">{{ gym_name }}</p>
+</header>
+
+<section class="panel">
+  <h2>Add member</h2>
+  <form method="post" action="/app/members" class="inline-form">
+    <input type="text" name="name" placeholder="Full name" required>
+    <input type="text" name="contact" placeholder="Phone (optional)">
+    <input type="email" name="email" placeholder="Email (optional)">
+    <input class="lookup-input" list="member-plans" data-target="member-plan-id" placeholder="Type plan (optional)">
+    <input type="hidden" name="plan_id" id="member-plan-id">
+    <datalist id="member-plans">{% for plan in plans %}<option value="{{ plan.name }}" data-id="{{ plan.id }}"></option>{% endfor %}</datalist>
+    <button type="submit">Add member</button>
+  </form>
+</section>
+
+<section class="panel">
+  <table class="data-table">
+    <thead>
+      <tr><th>Name</th><th>Status</th><th>Plan</th><th>Contact</th><th>Email</th><th>Joined</th></tr>
+    </thead>
+    <tbody>
+      {% for row in members %}
+        {% set m = row.member %}
+        <tr>
+          <td><a class="member-link" href="/app/members/{{ m.id }}">{{ m.name }}</a></td>
+          <td><span class="status-pill status-{{ m.status.value }}">{{ m.status.value }}</span></td>
+          <td>{{ row.plan_name }}</td>
+          <td>{{ m.contact or "—" }}</td>
+          <td>{{ m.email or "—" }}</td>
+          <td class="mono">{{ m.join_date }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="6" class="empty">No members yet. Add your first one above.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

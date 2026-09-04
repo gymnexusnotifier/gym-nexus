@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Gym Console{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">&#9679;</span>
+        <span class="brand-name">{{ gym_name or "Gym Console" }}</span>
+      </div>
+      <nav class="nav">
+        {% if request.state.permissions.dashboard %}<a href="/app/dashboard" class="{{ 'active' if active_nav == 'dashboard' else '' }}">Dashboard</a>{% endif %}
+        {% if request.state.permissions.members %}<a href="/app/members" class="{{ 'active' if active_nav == 'members' else '' }}">Members</a>{% endif %}
+        {% if request.state.permissions.members %}<a href="/app/plans" class="{{ 'active' if active_nav == 'plans' else '' }}">Plans</a>{% endif %}
+        {% if request.state.permissions.payments %}<a href="/app/payments" class="{{ 'active' if active_nav == 'payments' else '' }}">Payments</a>{% endif %}
+        {% if request.state.permissions.classes %}<a href="/app/classes" class="{{ 'active' if active_nav == 'classes' else '' }}">Classes</a>{% endif %}
+        {% if request.state.permissions.attendance %}<a href="/app/attendance" class="{{ 'active' if active_nav == 'attendance' else '' }}">Attendance</a>{% endif %}
+        {% if request.state.permissions.inquiries %}<a href="/app/inquiries" class="{{ 'active' if active_nav == 'inquiries' else '' }}">Inquiries</a>{% endif %}
+        {% if user_role == "gym_owner" %}
+        <a href="/app/staff" class="{{ 'active' if active_nav == 'staff' else '' }}">Staff</a>
+        {% endif %}
+        {% if user_role == "trainer" %}
+        <a href="/app/trainer/schedule" class="{{ 'active' if active_nav == 'trainer_schedule' else '' }}">My Schedule</a>
+        {% endif %}
+        {% if request.state.permissions.notifications %}<a href="/app/notifications" class="{{ 'active' if active_nav == 'notifications' else '' }}">Notifications</a>{% endif %}
+        <a href="/app/billing" class="{{ 'active' if active_nav == 'billing' else '' }}">Billing</a>
+        {% if user_role == "gym_owner" %}
+        <a href="/app/activity" class="{{ 'active' if active_nav == 'activity' else '' }}">Activity history</a>
+        {% endif %}
+      </nav>
+      <a href="/logout" class="logout-link">Log out</a>
+    </aside>
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script>
+    document.querySelectorAll('.lookup-input').forEach((input) => {
+      const target = document.getElementById(input.dataset.target);
+      const list = document.getElementById(input.getAttribute('list'));
+      if (!target || !list) return;
+      const syncValue = () => {
+        const option = Array.from(list.options).find((item) => item.value === input.value);
+        target.value = option ? option.dataset.id : '';
+        input.setCustomValidity(input.value && !option ? 'Choose a suggested item.' : '');
+      };
+      input.addEventListener('input', syncValue);
+      input.form?.addEventListener('submit', (event) => {
+        syncValue();
+        if (input.required && !target.value) event.preventDefault();
+      });
+    });
+  </script>
+</body>
+</html>

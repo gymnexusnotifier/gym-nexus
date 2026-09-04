@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-header">
+  <h1>Inquiry — {{ inquiry.name }}</h1>
+  <p class="page-sub">{{ gym_name }}</p>
+</header>
+
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
+
+<section class="panel">
+  <h2>Details</h2>
+  <div>
+    <p><strong>Contact:</strong> {{ inquiry.contact or '—' }}</p>
+    <p><strong>Email:</strong> {{ inquiry.email or '—' }}</p>
+    <p><strong>Source:</strong> {{ inquiry.source or '—' }}</p>
+    <p><strong>Fitness goal:</strong> {{ inquiry.fitness_goal or '—' }}</p>
+    <p><strong>Preferred time:</strong> {{ inquiry.preferred_time or '—' }}</p>
+    <p><strong>Interested plan:</strong> {{ inquiry.plan_name or '—' }}</p>
+    <p><strong>Status:</strong> <span class="status-pill status-{{ inquiry.status.value }}">{{ inquiry.status.value }}</span></p>
+    <p><strong>Next follow-up:</strong> {{ inquiry.next_followup or '—' }}</p>
+  </div>
+  <div style="margin-top:16px; display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+    <form method="post" action="/app/inquiries/{{ inquiry.id }}/send-reminder" style="display:inline-block; margin:0;">
+      <button type="submit" class="secondary-button">Send reminder email</button>
+    </form>
+    <form method="post" action="/app/inquiries/{{ inquiry.id }}/convert" style="display:inline-block; margin:0;">
+      <button type="submit">Convert to Member</button>
+    </form>
+    <form method="post" action="/app/inquiries/{{ inquiry.id }}/mark-lost" style="display:inline-flex; gap:8px; align-items:center; margin:0;">
+      <input type="text" name="lost_reason" placeholder="Reason (optional)">
+      <button type="submit" class="danger-button">Mark Lost</button>
+    </form>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Follow-up history</h2>
+  <ul class="risk-list">
+    {% for f in inquiry.followups|sort(attribute='created_at', reverse=true) %}
+      <li>
+        <span class="risk-pill {% if f.outcome == 'email_sent' %}risk-medium{% else %}risk-high{% endif %}">{{ 'Email sent' if f.outcome == 'email_sent' else (f.outcome or 'Follow-up') }}</span>
+        <div><div class="risk-name">{{ f.note or 'Follow-up recorded' }}</div><div class="risk-reason">{{ f.created_at.strftime('%d %b %Y, %H:%M') }}{% if f.staff_id %} · recorded by staff{% endif %}</div></div>
+      </li>
+    {% else %}
+      <li class="empty">No follow-ups yet.</li>
+    {% endfor %}
+  </ul>
+
+  <h3>Add follow-up</h3>
+  <form method="post" action="/app/inquiries/{{ inquiry.id }}/followups">
+    <textarea name="note" rows="3" placeholder="What was said"></textarea>
+    <input type="text" name="outcome" placeholder="Outcome (optional)">
+    <input type="date" name="next_date" placeholder="Next follow-up date (optional)">
+    <button type="submit">Add follow-up</button>
+  </form>
+</section>
+{% endblock %}

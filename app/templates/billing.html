@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-header">
+  <h1>Billing</h1>
+  <p class="page-sub">{{ gym_name }} &middot; your subscription with us</p>
+</header>
+
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+
+<section class="panel">
+  <h2>Current status</h2>
+  <p>
+    <span class="status-pill status-{{ 'active' if status == 'active' else 'expired' if status in ('cancelled','past_due') else 'frozen' }}">
+      {{ status }}
+    </span>
+  </p>
+  {% if plan_name %}<p>Plan: <strong>{{ plan_name }}</strong></p>{% endif %}
+  {% if trial_ends_at %}<p>Trial ends: <span class="mono">{{ trial_ends_at }}</span></p>{% endif %}
+  {% if current_period_end %}<p>Current period ends: <span class="mono">{{ current_period_end }}</span></p>{% endif %}
+</section>
+
+{% if user_role == "gym_owner" %}
+<section class="panel">
+  <h2>Available plans</h2>
+  <div class="plan-grid">
+    {% for p in plans %}
+      <div class="plan-card">
+        <div class="plan-name">{{ p.name }}</div>
+        <div class="plan-price mono">Rs. {{ "%.0f"|format(p.price|float) }}<span class="plan-interval">/{{ p.billing_interval }}</span></div>
+        <div class="plan-limit">{{ p.member_limit if p.member_limit else "Unlimited" }} members</div>
+        <form method="post" action="/app/billing/subscribe">
+          <input type="hidden" name="platform_plan_id" value="{{ p.id }}">
+          <button type="submit">Subscribe</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

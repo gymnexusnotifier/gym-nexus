@@ -1,0 +1,314 @@
+{% extends "superadmin_base.html" %}
+{% block content %}
+<header class="page-header">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;">
+    <div>
+      <h1 style="margin-bottom:6px;">Platform Console — Nexus</h1>
+      <div class="page-sub">Enterprise view · AI operations & platform health</div>
+    </div>
+    <div class="toolbar-form" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+      {% if active_section in ['overview', 'plans'] %}<form method="post" action="/app/superadmin/platform-plans" class="toolbar-form">
+        <input type="text" name="name" placeholder="Quick plan name" style="min-width:180px;">
+        <input type="number" name="price" placeholder="Price" style="width:100px;">
+        <button type="submit">Create Plan</button>
+      </form>{% endif %}
+      {% if active_section in ['overview', 'gyms'] %}<a href="#gyms-form" class="receipt-link">+ Add gym</a>{% endif %}
+    </div>
+  </div>
+</header>
+
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
+
+{% if active_section in ['overview', 'analytics'] %}<section class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">Total gyms</div>
+    <div class="stat-value mono">{{ total_gyms }}</div>
+    <div class="stat-sub" style="margin-top:8px;color:var(--ink-soft);font-size:13px;">Active: {{ active_count }} · Trial: {{ trial_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total members</div>
+    <div class="stat-value mono">{{ total_members }}</div>
+    <div class="stat-sub" style="margin-top:8px;color:var(--ink-soft);font-size:13px;">Active: {{ active_members }} · Expired: {{ expired_members }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Platform plans</div>
+    <div class="stat-value mono">{{ total_platform_plans }}</div>
+    <div class="stat-sub" style="margin-top:8px;color:var(--ink-soft);font-size:13px;">Popular: {% if plans|length>0 %}{{ plans[0].name }}{% else %}—{% endif %}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Approx. MRR</div>
+    <div class="stat-value mono">Rs. {{ "%.0f"|format(mrr) }}</div>
+    <div class="stat-sub" style="margin-top:8px;color:var(--ink-soft);font-size:13px;">Active subscriptions: {{ active_count }}</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Today's attendance</div>
+    <div class="stat-value mono">{{ today_attendance }}</div>
+    <div class="stat-sub" style="margin-top:8px;color:var(--ink-soft);font-size:13px;">Reminder scheduler active</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Active members</div>
+    <div class="stat-value mono">{{ active_members }}</div>
+    <div class="stat-sub" style="margin-top:8px;color:var(--ink-soft);font-size:13px;">Automated conversion logs</div>
+  </div>
+</section>{% endif %}
+
+{% if active_section == 'analytics' %}
+<section class="panels">
+  <div class="panel">
+    <h2>Platform health <span class="tag">live totals</span></h2>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">Total users</div><div class="stat-value mono">{{ total_users }}</div></div>
+      <div class="stat-card"><div class="stat-label">Attendance records</div><div class="stat-value mono">{{ total_attendance }}</div></div>
+      <div class="stat-card"><div class="stat-label">Members active</div><div class="stat-value mono">{{ active_members }}</div></div>
+      <div class="stat-card"><div class="stat-label">Members expired</div><div class="stat-value mono">{{ expired_members }}</div></div>
+      <div class="stat-card"><div class="stat-label">Members frozen</div><div class="stat-value mono">{{ frozen_members }}</div></div>
+      <div class="stat-card"><div class="stat-label">Payments this month</div><div class="stat-value mono">Rs. {{ "%.0f"|format(monthly_payments|float) }}</div></div>
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Subscription mix <span class="tag">gyms</span></h2>
+    <table class="data-table">
+      <thead><tr><th>Status</th><th>Gyms</th><th>Share</th></tr></thead>
+      <tbody>
+        {% for status, count in status_counts.items() %}
+        <tr><td><span class="status-pill status-{{ 'active' if status == 'active' else 'expired' if status in ('cancelled', 'past_due') else 'frozen' }}">{{ status }}</span></td><td class="mono">{{ count }}</td><td>{% if total_gyms %}{{ (count / total_gyms * 100)|round(1) }}%{% else %}0%{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p class="page-sub" style="margin-top:16px;">All-time payment volume: <strong>Rs. {{ "%.0f"|format(total_payments|float) }}</strong></p>
+  </div>
+</section>
+<section class="panel">
+  <h2>Plan adoption <span class="tag">gyms and members</span></h2>
+  <table class="data-table">
+    <thead><tr><th>Plan</th><th>Gyms</th><th>Members</th><th>Member limit</th></tr></thead>
+    <tbody>
+      {% for plan in plan_rows %}
+      <tr><td>{{ plan.name }}</td><td class="mono">{{ plan.gym_count }}</td><td class="mono">{{ plan.member_count }}</td><td class="mono">{{ plan.member_limit or 'Unlimited' }}</td></tr>
+      {% else %}<tr><td colspan="4" class="empty">No platform plan data yet.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="panels">
+{% if active_section in ['overview', 'gyms'] %}
+  <div class="panel">
+    <h2>Gyms overview <span class="tag">real-time</span></h2>
+    <table class="data-table">
+      <thead><tr><th>Gym</th><th>Status</th><th>Plan</th><th>Members</th><th>Owner</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for g in gyms %}
+          <tr id="gym-{{ g.id }}">
+            <td>{{ g.name }}</td>
+            <td><span class="status-pill status-{{ 'active' if g.status == 'active' else 'expired' if g.status in ('cancelled','past_due') else 'frozen' }}">{{ g.status }}</span></td>
+            <td>{{ g.plan_name or '—' }}</td>
+            <td class="mono">{{ g.member_count }}</td>
+            <td>{{ g.owner_email or '—' }}</td>
+            <td>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <a href="/app/superadmin?section=gyms&amp;edit_gym={{ g.id }}#gym-{{ g.id }}" class="receipt-link">Open</a>
+                <form method="post" action="/app/superadmin/gyms/{{ g.id }}/delete" onsubmit="return confirm('Delete this gym and all of its data?');">
+                  <button type="submit" class="danger-button">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% if edit_gym_id == g.id|string %}
+          <tr>
+            <td colspan="6">
+              <form method="post" action="/app/superadmin/gyms/{{ g.id }}/update" class="detail-form">
+                <div class="form-grid">
+                  <label>Gym name<input type="text" name="name" value="{{ g.name }}" required></label>
+                  <label>Owner email<input type="email" name="owner_email" value="{{ g.owner_email }}"></label>
+                  <label>New owner password<input type="password" name="owner_password" placeholder="Leave blank to keep current password"></label>
+                  <label>Platform plan<select name="platform_plan_id" required>
+                    {% for plan in plans %}<option value="{{ plan.id }}" {% if g.plan_id == plan.id|string %}selected{% endif %}>{{ plan.name }} (Rs. {{ plan.price }})</option>{% endfor %}
+                  </select></label>
+                  <label>Subscription state<select name="subscription_status">
+                    {% for status in ['trial', 'active', 'cancelled', 'past_due'] %}<option value="{{ status }}" {% if g.status == status %}selected{% endif %}>{{ status|replace('_', ' ')|title }}</option>{% endfor %}
+                  </select></label>
+                </div>
+                <button type="submit">Save gym</button>
+                <a href="/app/superadmin?section=gyms#gym-{{ g.id }}" class="receipt-link">Cancel</a>
+              </form>
+            </td>
+          </tr>
+          {% endif %}
+        {% else %}
+          <tr><td colspan="6" class="empty">No gyms yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+{% if active_section in ['overview', 'plans', 'settings'] %}
+  <div class="panel">
+    <h2>Platform plans & actions <span class="tag">admin</span></h2>
+    {% if active_section in ['overview', 'plans'] %}
+    <div style="margin-bottom:12px;">
+      <form method="post" action="/app/superadmin/platform-plans" class="inline-form">
+        <input type="text" name="name" placeholder="Plan name">
+        <input type="number" name="price" placeholder="Price">
+        <button type="submit">Create</button>
+      </form>
+    </div>
+
+    <table class="data-table">
+      <thead><tr><th>Name</th><th>Price</th><th>Interval</th><th>Members</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for p in plans %}
+          <tr>
+            <td>{{ p.name }}</td>
+            <td class="mono">Rs. {{ "%.0f"|format(p.price|float) }}</td>
+            <td>{{ p.billing_interval }}</td>
+            <td class="mono">{{ p.member_limit if p.member_limit else '—' }}</td>
+            <td>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <a href="/app/superadmin?section=plans&amp;edit_plan={{ p.id }}#plan-{{ p.id }}" class="receipt-link">Edit</a>
+                <form method="post" action="/app/superadmin/platform-plans/{{ p.id }}/delete" onsubmit="return confirm('Delete this platform plan?');">
+                  <button type="submit" class="danger-button">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% if edit_plan_id == p.id|string %}
+          <tr id="plan-{{ p.id }}">
+            <td colspan="5">
+              <form method="post" action="/app/superadmin/platform-plans/{{ p.id }}/update" class="detail-form">
+                <div class="form-grid">
+                  <label>Plan name<input type="text" name="name" value="{{ p.name }}" required></label>
+                  <label>Price (Rs.)<input type="number" step="0.01" min="0" name="price" value="{{ p.price }}" required></label>
+                  <label>Billing interval<select name="billing_interval">
+                    {% for interval in ['monthly', 'quarterly', 'yearly'] %}<option value="{{ interval }}" {% if p.billing_interval == interval %}selected{% endif %}>{{ interval|title }}</option>{% endfor %}
+                  </select></label>
+                  <label>Member limit<input type="number" min="1" name="member_limit" value="{{ p.member_limit or '' }}" placeholder="Unlimited"></label>
+                  <label class="full-span">Razorpay plan ID<input type="text" name="razorpay_plan_id" value="{{ p.razorpay_plan_id or '' }}"></label>
+                </div>
+                <button type="submit">Save plan</button>
+                <a href="/app/superadmin?section=plans#plan-{{ p.id }}" class="receipt-link">Cancel</a>
+              </form>
+            </td>
+          </tr>
+          {% endif %}
+        {% else %}
+          <tr><td colspan="5" class="empty">No plans yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% endif %}
+    {% if active_section in ['overview', 'settings'] %}<hr style="margin:18px 0;border:none;border-top:1px solid var(--border);">
+    <h3>Email & SMTP</h3>
+    {% if smtp_configured %}
+      <p class="page-sub">Sender: <strong>{{ smtp_from_email }}</strong></p>
+    {% else %}
+      <p class="alert-error">SMTP not configured — test emails will fail until a verified sender is set.</p>
+    {% endif %}
+    <form method="post" action="/app/superadmin/test-email" class="detail-form">
+      <label>Send test email to
+        <input type="email" name="email" required>
+      </label>
+      <label>Message
+        <input type="text" name="subject" value="Platform SMTP verification">
+      </label>
+      <label style="margin-top:6px;">Body
+        <textarea name="body" rows="3" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);">This is a test email from Nexus platform.</textarea>
+      </label>
+      <button type="submit">Send test email</button>
+    </form>
+
+    <hr style="margin:18px 0;border:none;border-top:1px solid var(--border);">
+    <h3>Follow-up reminder time (platform default)</h3>
+    <form method="post" action="/app/superadmin/set-reminder-time" class="detail-form">
+      <label>Reminder time (HH:MM, UTC)
+        <input type="text" name="reminder_time" placeholder="08:00" value="{{ reminder_time or '' }}">
+      </label>
+      <p class="page-sub">This time is used to send follow-up reminders to assigned staff or the gym owner one day before the scheduled follow-up. If no time is set, reminders will be sent immediately when detected.</p>
+      <button type="submit">Save reminder time</button>
+    </form>
+    <form method="post" action="/app/superadmin/run-followup-reminders" class="detail-form" style="margin-top: 12px; max-width: 300px;">
+      <button type="submit" class="secondary-button">Send due reminders now</button>
+    </form>
+    {% endif %}
+  </div>
+{% endif %}
+</section>
+
+{% if active_section in ['overview', 'gyms'] %}
+<section class="panel" id="gyms-form">
+  <h2>Create gym</h2>
+  <form method="post" action="/app/superadmin/gyms" class="detail-form">
+    <div class="form-grid">
+      <label>
+        Gym name
+        <input type="text" name="name" placeholder="e.g. Peak Performance Gym" required>
+      </label>
+      <label>
+        Owner email
+        <input type="email" name="owner_email" placeholder="owner@example.com" required>
+      </label>
+      <label class="full-span">
+        Owner password
+        <input type="password" name="owner_password" placeholder="Create a secure password" required>
+      </label>
+      <label class="full-span">
+        Platform plan
+        <select name="platform_plan_id">
+          {% for plan in plans %}
+            <option value="{{ plan.id }}">{{ plan.name }} (Rs. {{ plan.price }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="full-span">
+        Subscription state
+        <select name="subscription_status">
+          <option value="trial">Trial</option>
+          <option value="active">Active</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="past_due">Past due</option>
+        </select>
+      </label>
+    </div>
+    <button type="submit">Create gym</button>
+  </form>
+</section>
+{% endif %}
+
+{% if active_section in ['overview', 'plans'] %}
+<section class="panel" id="plans-form">
+  <h2>Create platform plan</h2>
+  <form method="post" action="/app/superadmin/platform-plans" class="detail-form">
+    <div class="form-grid">
+      <label>
+        Plan name
+        <input type="text" name="name" placeholder="e.g. Pro Plus" required>
+      </label>
+      <label>
+        Price (Rs.)
+        <input type="number" step="0.01" min="0" name="price" placeholder="2999" required>
+      </label>
+      <label>
+        Billing interval
+        <select name="billing_interval">
+          <option value="monthly">Monthly</option>
+          <option value="quarterly">Quarterly</option>
+          <option value="yearly">Yearly</option>
+        </select>
+      </label>
+      <label>
+        Member limit
+        <input type="number" min="1" name="member_limit" placeholder="Optional, leave blank for unlimited">
+      </label>
+      <label class="full-span">
+        Razorpay plan ID
+        <input type="text" name="razorpay_plan_id" placeholder="optional">
+      </label>
+    </div>
+    <button type="submit">Create plan</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

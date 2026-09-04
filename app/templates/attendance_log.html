@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-header">
+  <h1>Attendance Log</h1>
+  <p class="page-sub">{{ gym_name }}</p>
+</header>
+
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+{% if marked %}<div class="alert-success">Marked {{ marked }} present for today.</div>{% endif %}
+{% if not face_recognition_available %}
+  <div class="alert-error">{{ face_status_message }}</div>
+{% endif %}
+
+<section class="panel">
+  <h2>Face scan check-in</h2>
+  <p class="empty">Use the camera below to scan a member face and automatically toggle their attendance for today.</p>
+  <div class="scanner-shell">
+    <div class="scanner-frame">
+      <video id="scanner-video" autoplay playsinline muted></video>
+      <canvas id="scanner-canvas" width="640" height="480" style="display:none;"></canvas>
+    </div>
+    <div class="scanner-controls">
+      <button type="button" id="start-face-scan" class="scanner-button">Open camera</button>
+      <button type="button" id="stop-face-scan" class="scanner-button secondary">Stop camera</button>
+    </div>
+    <div id="scanner-status" class="scanner-status">Camera is off.</div>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Manual check-in</h2>
+  <p class="empty">Use this if a member's face isn't enrolled yet, or the kiosk camera is unavailable.</p>
+  <form method="post" action="/app/attendance/mark" class="inline-form">
+    <input class="lookup-input" list="attendance-members" data-target="attendance-member-id" placeholder="Type member name" required>
+    <input type="hidden" name="member_id" id="attendance-member-id">
+    <datalist id="attendance-members">{% for m in members %}<option value="{{ m.name }}" data-id="{{ m.id }}"></option>{% endfor %}</datalist>
+    <button type="submit">Mark present</button>
+  </form>
+</section>
+
+<div class="tab-toggle">
+  <a href="/app/attendance?view=today" class="{{ 'tab-active' if view == 'today' else '' }}">Today</a>
+  <a href="/app/attendance?view=recent" class="{{ 'tab-active' if view == 'recent' else '' }}">Last 30 days</a>
+</div>
+
+<section class="panel">
+  <table class="data-table">
+    <thead><tr><th>Date</th><th>Check-in</th><th>Check-out</th><th>Member</th></tr></thead>
+    <tbody>
+      {% for r in records %}
+        <tr>
+          <td class="mono">{{ r.date }}</td>
+          <td class="mono">{{ r.check_in }}</td>
+          <td class="mono">{{ r.check_out or "—" }}</td>
+          <td>{{ r.member }}</td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="empty">No check-ins found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<script>
+  const scannerVideo = document.getElementById('scanner-video');
+  const scannerCanvas = document.getElementById('scanner-canvas');
+  const scannerStatus = document.getElementById('scanner-status');
+  const startFaceScanBtn = document.getElementById('start-face-scan');
+  const stopFaceScanBtn = document.getElementById('stop-face-scan');
+  const ctx = scannerCanvas.getContext('2d');
+  let faceScanStream = null;
+  let scanTimer = null;
+
+  function setScannerStatus(message, isError = false) {
+    scannerStatus.textContent = message;
+    scannerStatus.classList.toggle('error', isError);
+  }
+
+  async function captureAndRecognize() {
+    if (!scannerVideo || !scannerVideo.videoWidth) return;
+    ctx.drawImage(scannerVideo, 0, 0, scannerCanvas.width, scannerCanvas.height);
+    const image = scannerCanvas.toDataURL('image/jpeg', 0.8);
+
+    try {
+      setScannerStatus('Scanning face...');
+      const response = await fetch('/app/attendance/recognize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image })
+      });
+      const data = await response.json();
+
+      if (data.status === 'checked_in') {
+        setScannerStatus(`${data.member_name || 'Member'} checked in at ${data.time}`);
+      } else if (data.status === 'checked_out') {
+        setScannerStatus(`${data.member_name || 'Member'} checked out at ${data.time}`);
+      } else if (data.status === 'too_soon') {
+        setScannerStatus(data.detail || 'Checkout must be at least 15 minutes after check-in.', true);
+      } else if (data.status === 'already_marked') {
+        setScannerStatus(`${data.member_name || 'Member'} already marked for today.`);
+      } else if (data.status === 'manual_only') {
+        setScannerStatus(data.detail || 'Face recognition is in manual fallback mode for this deployment.', true);
+      } else if (data.status === 'no_face') {
+        setScannerStatus('No face detected. Try again.');
+      } else if (data.status === 'unknown') {
+        setScannerStatus('Face not recognized.');
+      } else if (data.status === 'no_known_faces') {
+        setScannerStatus('No enrolled faces for this gym yet.');
+      } else if (data.status === 'unauthorized') {
+        setScannerStatus('Please log in again.', true);
+      } else if (data.status === 'error') {
+        setScannerStatus(data.detail || 'Could not process face scan.', true);
+      }
+    } catch (error) {
+      setScannerStatus('Camera scan failed. Please try again.', true);
+    }
+  }
+
+  async function startScanner() {
+    if (faceScanStream) {
+      return;
+    }
+
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setScannerStatus('This browser does not support camera access.', true);
+        return;
+      }
+
+      faceScanStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: false,
+      });
+      scannerVideo.srcObject = faceScanStream;
+      scannerVideo.play();
+      setScannerStatus('Camera ready. Scanning for faces...');
+      scanTimer = setInterval(captureAndRecognize, 2000);
+    } catch (error) {
+      setScannerStatus('Could not access the camera. Please allow camera permission.', true);
+    }
+  }
+
+  function stopScanner() {
+    if (scanTimer) {
+      clearInterval(scanTimer);
+      scanTimer = null;
+    }
+
+    if (faceScanStream) {
+      faceScanStream.getTracks().forEach(track => track.stop());
+      faceScanStream = null;
+    }
+
+    if (scannerVideo) {
+      scannerVideo.srcObject = null;
+    }
+
+    setScannerStatus('Camera is off.');
+  }
+
+  startFaceScanBtn.addEventListener('click', startScanner);
+  stopFaceScanBtn.addEventListener('click', stopScanner);
+</script>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-header">
+  <h1>Staff &amp; Trainers</h1>
+  <p class="page-sub">{{ gym_name }}</p>
+</header>
+
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
+
+<section class="panel">
+  <div class="section-header-row">
+    <h2>Invite staff or trainer</h2>
+    <span class="tag ai-tag">team access</span>
+  </div>
+  <form method="post" action="/app/staff" class="invite-form">
+    <label class="invite-field">
+      Email
+      <input type="email" name="email" placeholder="name@example.com" required>
+    </label>
+    <label class="invite-field">
+      Temporary password
+      <input type="password" name="password" placeholder="Secure password" required>
+    </label>
+    <label class="invite-field">
+      Role
+      <select name="role" required>
+        <option value="staff">Staff (front desk)</option>
+        <option value="trainer">Trainer</option>
+      </select>
+    </label>
+    <div class="invite-actions">
+      <div class="invite-note">Credentials will be sent to the invited email address.</div>
+      <button type="submit" class="primary-action">Send invite</button>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="section-header-row">
+    <h2>Team roster</h2>
+    <span class="tag">access control</span>
+  </div>
+  <table class="data-table">
+    <thead><tr><th>Email</th><th>Role</th><th></th></tr></thead>
+    <tbody>
+      {% for s in staff %}
+        <tr>
+          <td>{{ s.email }}</td>
+          <td><span class="tag">{{ s.role.value }}</span></td>
+          <td>
+            <form method="post" action="/app/staff/{{ s.id }}/remove" onsubmit="return confirm('Remove this account?');">
+              <button type="submit" class="danger-button">Remove</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3" class="empty">No staff or trainers yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+<section class="panel">
+  <div class="section-header-row">
+    <h2>Privileges</h2>
+    <span class="tag">owner controls</span>
+  </div>
+  <p class="page-sub" style="margin-bottom:16px;">Choose which areas each staff member or trainer can access. Changes apply to web and API requests.</p>
+  {% for row in permission_rows %}
+    <form method="post" action="/app/staff/{{ row.user.id }}/permissions" class="permission-card">
+      <div class="permission-heading"><strong>{{ row.user.email }}</strong><span class="tag">{{ row.user.role.value }}</span></div>
+      <div class="permission-grid">
+        {% for permission, label in managed_permissions %}
+          <label class="permission-option"><input type="checkbox" name="{{ permission }}" {% if row.permissions[permission] %}checked{% endif %}> {{ label }}</label>
+        {% endfor %}
+      </div>
+      <button type="submit" class="secondary-button">Save privileges</button>
+    </form>
+  {% else %}<p class="empty">Invite a staff member or trainer to manage privileges.</p>{% endfor %}
+</section>
+{% endblock %}

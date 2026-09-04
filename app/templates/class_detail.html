@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-header">
+  <h1>{{ gym_class.name }}</h1>
+  <p class="page-sub">{{ gym_class.day }} {{ gym_class.time }} &middot; {{ gym_class.duration }} min &middot; Trainer: {{ gym_class.trainer }}</p>
+</header>
+
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+
+<section class="panel">
+  <h2>Booked members <span class="tag">{{ bookings|length }}/{{ gym_class.capacity }}</span></h2>
+  <table class="data-table">
+    <thead><tr><th>Member</th><th></th></tr></thead>
+    <tbody>
+      {% for b in bookings %}
+        <tr>
+          <td>{{ b.member_name }}</td>
+          <td>
+            <form method="post" action="/app/classes/{{ gym_class.id }}/bookings/{{ b.member_id }}/cancel" onsubmit="return confirm('Remove this booking?');">
+              <button type="submit" class="danger-button">Remove</button>
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="2" class="empty">No members booked yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

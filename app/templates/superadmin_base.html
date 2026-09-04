@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Platform Console{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark">&#9679;</span>
+        <span class="brand-name">Platform Console</span>
+      </div>
+      <nav class="nav">
+        <a href="/app/superadmin?section=overview" class="{% if active_section == 'overview' %}active{% endif %}">Overview</a>
+        <a href="/app/superadmin?section=analytics" class="{% if active_section == 'analytics' %}active{% endif %}">Analytics</a>
+        <a href="/app/superadmin?section=gyms" class="{% if active_section == 'gyms' %}active{% endif %}">Gyms</a>
+        <a href="/app/superadmin?section=plans" class="{% if active_section == 'plans' %}active{% endif %}">Plans</a>
+        <a href="/app/superadmin?section=settings" class="{% if active_section == 'settings' %}active{% endif %}">Settings</a>
+      </nav>
+      <a href="/logout" class="logout-link">Log out</a>
+    </aside>
+    <main class="content">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+  <script>
+    document.querySelectorAll('.lookup-input').forEach((input) => {
+      const target = document.getElementById(input.dataset.target);
+      const list = document.getElementById(input.getAttribute('list'));
+      if (!target || !list) return;
+      const syncValue = () => {
+        const option = Array.from(list.options).find((item) => item.value === input.value);
+        target.value = option ? option.dataset.id : '';
+        input.setCustomValidity(input.value && !option ? 'Choose a suggested item.' : '');
+      };
+      input.addEventListener('input', syncValue);
+      input.form?.addEventListener('submit', (event) => {
+        syncValue();
+        if (input.required && !target.value) event.preventDefault();
+      });
+    });
+  </script>
+</body>
+</html>
