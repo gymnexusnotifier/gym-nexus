@@ -9,9 +9,14 @@ class Settings(BaseSettings):
 
     smtp_host: str = ""
     smtp_port: int = 587
+    smtp_fallback_port: int = 2525
+    smtp_timeout: int = 10
+    smtp_use_ssl: bool = False
     smtp_user: str = ""
     smtp_password: str = ""
     from_email: str = ""
+    brevo_api_key: str = ""
+    brevo_sender_name: str = "GYM-NEXUS"
     scheduler_enabled: bool = True
     public_url: str = ""  # optional public base URL used in emails (e.g. https://app.example.com)
 

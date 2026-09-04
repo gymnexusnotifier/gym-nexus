@@ -141,10 +141,14 @@ SMTP_PORT=587
 SMTP_USER=your_brevo_login
 SMTP_PASSWORD=your_brevo_smtp_key
 FROM_EMAIL=your_email
+BREVO_API_KEY=your_brevo_v3_api_key
+BREVO_SENDER_NAME=GYM-NEXUS
 RAZORPAY_KEY_ID=
 RAZORPAY_KEY_SECRET=
 RAZORPAY_WEBHOOK_SECRET=
 ```
+
+For Railway deployments, configure `BREVO_API_KEY` and `FROM_EMAIL` as service variables. When `BREVO_API_KEY` is present, the app uses Brevo's HTTPS API instead of SMTP, avoiding Railway SMTP port restrictions.
 
 For production, swap SQLite for PostgreSQL:
 

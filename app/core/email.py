@@ -1,13 +1,64 @@
 import smtplib
+import base64
 from email.message import EmailMessage
+
+import requests
 
 from app.core.config import settings
 
 
+def _send_via_brevo_api(
+    to_email: str,
+    subject: str,
+    body: str,
+    is_html: bool,
+    cc_emails: list[str],
+    attachments: list[tuple[str, bytes, str]],
+) -> bool:
+    sender = settings.from_email or settings.smtp_user
+    payload = {
+        "sender": {"email": sender, "name": settings.brevo_sender_name},
+        "to": [{"email": to_email}],
+        "subject": subject,
+        "htmlContent" if is_html else "textContent": body,
+    }
+    if cc_emails:
+        payload["cc"] = [{"email": email} for email in cc_emails]
+    if attachments:
+        payload["attachment"] = [
+            {"name": filename, "content": base64.b64encode(content).decode("ascii")}
+            for filename, content, _ in attachments
+        ]
+
+    response = requests.post(
+        "https://api.brevo.com/v3/smtp/email",
+        headers={
+            "accept": "application/json",
+            "api-key": settings.brevo_api_key,
+            "content-type": "application/json",
+        },
+        json=payload,
+        timeout=settings.smtp_timeout,
+    )
+    if response.ok:
+        return True
+    print(f"Brevo API rejected email to {to_email}: HTTP {response.status_code}")
+    return False
+
+
 def send_email(to_email: str, subject: str, body: str, is_html: bool = False, cc_emails: list[str] | None = None, attachments: list[tuple[str, bytes, str]] | None = None) -> bool:
+    cc_list = [email.strip() for email in (cc_emails or []) if email and email.strip()]
+    attachment_list = attachments or []
+    if settings.brevo_api_key and (settings.from_email or settings.smtp_user):
+        try:
+            return _send_via_brevo_api(to_email, subject, body, is_html, cc_list, attachment_list)
+        except requests.RequestException as e:
+            print(f"Failed to send email to {to_email} through Brevo API: {e}")
+            return False
+
     if not settings.smtp_host or not settings.smtp_user or not settings.smtp_password:
         print(
-            "SMTP is not configured. Set SMTP_HOST, SMTP_USER, and SMTP_PASSWORD before sending email."
+            "Email is not configured. Set BREVO_API_KEY and FROM_EMAIL, or SMTP_HOST, SMTP_USER, and SMTP_PASSWORD."
         )
         return False
 
@@ -17,7 +68,6 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False, cc
         return False
 
     recipients = [to_email]
-    cc_list = [email.strip() for email in (cc_emails or []) if email and email.strip()]
     if cc_list:
         recipients.extend(cc_list)
 
@@ -29,17 +79,36 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False, cc
         msg["To"] = to_email
         if cc_list:
             msg["Cc"] = ", ".join(cc_list)
-        for filename, content, mimetype in attachments or []:
+        for filename, content, mimetype in attachment_list:
             maintype, subtype = mimetype.split("/", 1)
             msg.add_attachment(content, maintype=maintype, subtype=subtype, filename=filename)
 
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(settings.smtp_user, settings.smtp_password)
-            server.sendmail(sender, recipients, msg.as_string())
-        return True
+        ports = [settings.smtp_port]
+        if settings.smtp_fallback_port and settings.smtp_fallback_port not in ports:
+            ports.append(settings.smtp_fallback_port)
+
+        for port_index, port in enumerate(ports):
+            smtp_class = smtplib.SMTP_SSL if settings.smtp_use_ssl or port == 465 else smtplib.SMTP
+            server = smtp_class(timeout=settings.smtp_timeout)
+            try:
+                server.connect(settings.smtp_host, port)
+            except (TimeoutError, OSError):
+                server.close()
+                if port_index == len(ports) - 1:
+                    raise
+                print(f"SMTP connection to {settings.smtp_host}:{port} failed; retrying on port {ports[port_index + 1]}.")
+                continue
+
+            try:
+                server.ehlo()
+                if not settings.smtp_use_ssl and port != 465:
+                    server.starttls()
+                    server.ehlo()
+                server.login(settings.smtp_user, settings.smtp_password)
+                server.sendmail(sender, recipients, msg.as_string())
+            finally:
+                server.close()
+            return True
     except Exception as e:
         print(f"Failed to send email to {to_email}: {e}")
         return False
