@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import verify_password, decode_access_token, create_access_token, hash_password
-from app.core.email import send_email, build_payment_confirmation_email, build_staff_invitation_email
+from app.core.email import send_email, build_payment_confirmation_email, build_staff_invitation_email, build_gym_owner_welcome_email
 from app.core.deps import has_permission
 from app.core.razorpay_client import get_razorpay_client
 from app.models.user import User
@@ -2079,7 +2079,18 @@ def create_gym_web(
     )
     db.add(owner)
     db.commit()
-    return RedirectResponse("/app/superadmin?success=Gym+created+successfully", status_code=303)
+    subject, body = build_gym_owner_welcome_email(
+        gym.name,
+        owner.email,
+        owner_password,
+        settings.public_url.rstrip("/") + "/login" if settings.public_url else "",
+    )
+    if not send_email(owner.email, subject, body, is_html=True):
+        return RedirectResponse(
+            "/app/superadmin?success=Gym+created,+but+the+owner+welcome+email+could+not+be+sent",
+            status_code=303,
+        )
+    return RedirectResponse("/app/superadmin?success=Gym+created+and+owner+welcome+email+sent", status_code=303)
 
 
 @router.post("/app/superadmin/gyms/{gym_id}/update")

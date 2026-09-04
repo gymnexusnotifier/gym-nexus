@@ -39,8 +39,15 @@ def _login_as_superadmin(email: str = "superadmin@test.com", password: str = "Su
     return response
 
 
-def test_superadmin_can_manage_platform_plans_and_gyms():
+def test_superadmin_can_manage_platform_plans_and_gyms(monkeypatch):
     _login_as_superadmin()
+    sent_email = {}
+
+    def fake_send_email(to_email, subject, body, is_html=False, **kwargs):
+        sent_email.update(to_email=to_email, subject=subject, body=body, is_html=is_html)
+        return True
+
+    monkeypatch.setattr("app.routers.web.send_email", fake_send_email)
 
     plan_create = client.post(
         "/app/superadmin/platform-plans",
@@ -69,6 +76,12 @@ def test_superadmin_can_manage_platform_plans_and_gyms():
         follow_redirects=False,
     )
     assert gym_create.status_code == 303
+    assert "owner+welcome+email+sent" in gym_create.headers["location"]
+    assert sent_email["to_email"] == "owner@alpha.com"
+    assert "Welcome to GYM-NEXUS" in sent_email["subject"]
+    assert "owner@alpha.com" in sent_email["body"]
+    assert "OwnerPass!123" in sent_email["body"]
+    assert sent_email["is_html"] is True
 
     db = TestingSessionLocal()
     from app.models.gym import Gym

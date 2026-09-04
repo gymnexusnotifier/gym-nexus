@@ -96,3 +96,29 @@ def build_staff_invitation_email(gym_name: str, email: str, password: str, role:
         </body></html>
         """
         return subject, body
+
+
+def build_gym_owner_welcome_email(gym_name: str, email: str, password: str, login_url: str = "") -> tuple[str, str]:
+        subject = f"Welcome to GYM-NEXUS - your {gym_name} owner account is ready"
+        login_link = f'<a href="{login_url}" style="color:#67e8f9;">Open the GYM-NEXUS login page</a>' if login_url else "Open the GYM-NEXUS login page"
+        body = f"""
+        <html><body style="margin:0;background:#07111f;color:#edf6ff;font-family:Arial,Helvetica,sans-serif;padding:32px 16px;">
+            <div style="max-width:600px;margin:auto;background:#0f172a;border:1px solid #334155;border-radius:18px;overflow:hidden;">
+                <div style="padding:28px;background:linear-gradient(135deg,#0e7490,#164e63);">
+                    <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#cffafe;">Welcome to GYM-NEXUS</div>
+                    <h1 style="margin:8px 0 0;font-size:28px;color:#fff;">Your gym is ready</h1>
+                </div>
+                <div style="padding:28px;">
+                    <p style="font-size:16px;">Welcome. Your GYM-NEXUS owner account for <strong>{gym_name}</strong> has been created.</p>
+                    <p>Use the credentials below to sign in and start managing your gym.</p>
+                    <div style="padding:18px;border:1px solid #334155;border-radius:12px;background:#111827;">
+                        <div><strong>Login email:</strong> {email}</div>
+                        <div style="margin-top:8px;"><strong>Temporary password:</strong> {password}</div>
+                    </div>
+                    <p style="margin:24px 0 0;">{login_link}</p>
+                    <p style="color:#9eb4c8;margin-bottom:0;">For your security, change your password after signing in. We look forward to supporting your gym.</p>
+                </div>
+            </div>
+        </body></html>
+        """
+        return subject, body
