@@ -42,7 +42,7 @@ def _send_via_brevo_api(
     )
     if response.ok:
         return True
-    print(f"Brevo API rejected email to {to_email}: HTTP {response.status_code}")
+    print(f"Brevo API rejected email to {to_email}: HTTP {response.status_code} - {response.text[:500]}")
     return False
 
 

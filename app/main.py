@@ -77,7 +77,14 @@ async def lifespan(app: FastAPI):
 
     # start APScheduler job for inquiry follow-up reminders (guarded)
     from app.core.config import settings
-    email_transport = "Brevo HTTPS API" if settings.brevo_api_key and (settings.from_email or settings.smtp_user) else "SMTP fallback"
+    if settings.brevo_api_key and (settings.from_email or settings.smtp_user):
+        email_transport = "Brevo HTTPS API"
+    elif settings.brevo_api_key:
+        email_transport = "Not configured: BREVO_API_KEY exists but FROM_EMAIL is missing"
+    elif settings.from_email or settings.smtp_user:
+        email_transport = "SMTP fallback: BREVO_API_KEY is missing"
+    else:
+        email_transport = "Not configured: BREVO_API_KEY and FROM_EMAIL are missing"
     print(f"Email transport: {email_transport}")
 
     scheduler = None
