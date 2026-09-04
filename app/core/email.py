@@ -7,6 +7,27 @@ import requests
 from app.core.config import settings
 
 
+def _mask_email(email: str) -> str:
+    if "@" not in email:
+        return "<invalid>" if email else "<missing>"
+    local, domain = email.split("@", 1)
+    return f"{local[:2]}***@{domain}" if len(local) > 2 else f"***@{domain}"
+
+
+def _log_email_configuration() -> None:
+    sender = settings.from_email or settings.smtp_user
+    api_key_present = bool(settings.brevo_api_key.strip())
+    print(
+        "Email configuration: "
+        f"brevo_api_key_present={api_key_present}, "
+        f"brevo_api_key_format_valid={api_key_present and settings.brevo_api_key.startswith('xkeysib-')}, "
+        f"sender={_mask_email(sender)}, "
+        f"smtp_host_configured={bool(settings.smtp_host)}, "
+        f"smtp_user_configured={bool(settings.smtp_user)}, "
+        f"smtp_password_configured={bool(settings.smtp_password)}"
+    )
+
+
 def _send_via_brevo_api(
     to_email: str,
     subject: str,
@@ -16,6 +37,7 @@ def _send_via_brevo_api(
     attachments: list[tuple[str, bytes, str]],
 ) -> bool:
     sender = settings.from_email or settings.smtp_user
+    print(f"Email send: transport=Brevo HTTPS API, recipient={_mask_email(to_email)}, sender={_mask_email(sender)}")
     payload = {
         "sender": {"email": sender, "name": settings.brevo_sender_name},
         "to": [{"email": to_email}],
@@ -49,6 +71,7 @@ def _send_via_brevo_api(
 def send_email(to_email: str, subject: str, body: str, is_html: bool = False, cc_emails: list[str] | None = None, attachments: list[tuple[str, bytes, str]] | None = None) -> bool:
     cc_list = [email.strip() for email in (cc_emails or []) if email and email.strip()]
     attachment_list = attachments or []
+    _log_email_configuration()
     if settings.brevo_api_key and (settings.from_email or settings.smtp_user):
         try:
             return _send_via_brevo_api(to_email, subject, body, is_html, cc_list, attachment_list)
@@ -63,6 +86,7 @@ def send_email(to_email: str, subject: str, body: str, is_html: bool = False, cc
         return False
 
     sender = settings.from_email or settings.smtp_user
+    print(f"Email send: transport=SMTP, recipient={_mask_email(to_email)}, host={settings.smtp_host}, port={settings.smtp_port}")
     if not sender:
         print("SMTP sender is not configured. Set FROM_EMAIL or SMTP_USER.")
         return False

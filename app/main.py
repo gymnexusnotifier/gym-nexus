@@ -86,6 +86,13 @@ async def lifespan(app: FastAPI):
     else:
         email_transport = "Not configured: BREVO_API_KEY and FROM_EMAIL are missing"
     print(f"Email transport: {email_transport}")
+    print(
+        "Email variable check: "
+        f"BREVO_API_KEY={'set' if settings.brevo_api_key else 'missing'}, "
+        f"FROM_EMAIL={'set' if settings.from_email else 'missing'}, "
+        f"SMTP_HOST={'set' if settings.smtp_host else 'missing'}, "
+        f"SMTP_PORT={settings.smtp_port}"
+    )
 
     scheduler = None
     if not settings.__dict__.get('scheduler_enabled', True):
