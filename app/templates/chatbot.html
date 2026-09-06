@@ -43,6 +43,14 @@
     let isReplying = false;
     let hasWelcomed = false;
 
+    const setChatbotOpen = (isOpen) => {
+      windowElement.hidden = !isOpen;
+      openButton.setAttribute('aria-expanded', String(isOpen));
+      if (!isOpen) openButton.focus();
+    };
+
+    setChatbotOpen(false);
+
     const scrollToLatest = () => { messages.scrollTop = messages.scrollHeight; };
 
     const addMessage = (text, sender) => {
@@ -108,8 +116,7 @@
     };
 
     openButton.addEventListener('click', () => {
-      windowElement.hidden = false;
-      openButton.setAttribute('aria-expanded', 'true');
+      setChatbotOpen(true);
       if (!hasWelcomed) {
         addMessage("Hi! I'm your Gym Assistant. How can I help you?", 'assistant');
         hasWelcomed = true;
@@ -118,9 +125,7 @@
       scrollToLatest();
     });
     closeButton.addEventListener('click', () => {
-      windowElement.hidden = true;
-      openButton.setAttribute('aria-expanded', 'false');
-      openButton.focus();
+      setChatbotOpen(false);
     });
     suggestions.addEventListener('click', (event) => {
       const button = event.target.closest('[data-chatbot-question]');
