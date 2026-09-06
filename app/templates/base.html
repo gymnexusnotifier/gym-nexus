@@ -25,6 +25,7 @@
         {% if request.state.permissions.inquiries %}<a href="/app/inquiries" class="{{ 'active' if active_nav == 'inquiries' else '' }}">Inquiries</a>{% endif %}
         {% if user_role == "gym_owner" %}
         <a href="/app/staff" class="{{ 'active' if active_nav == 'staff' else '' }}">Staff</a>
+        <a href="/app/support" class="{{ 'active' if active_nav == 'support' else '' }}">Support</a>
         {% endif %}
         {% if user_role == "trainer" %}
         <a href="/app/trainer/schedule" class="{{ 'active' if active_nav == 'trainer_schedule' else '' }}">My Schedule</a>

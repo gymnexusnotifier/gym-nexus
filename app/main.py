@@ -19,7 +19,8 @@ from app.models.inquiry import Inquiry, FollowUp
 from app.models.member import Member, MembershipPlan
 from app.models.payment import Payment
 from app.models.platform_plan import PlatformPlan
-from app.routers import auth, members, users, attendance, payments, dashboard, churn, classes, notifications, billing, web
+from app.models.support import SupportTicket, SupportMessage, SupportAttachment, SupportAuditEvent
+from app.routers import auth, members, users, attendance, payments, dashboard, churn, classes, notifications, billing, web, support
 
 Base.metadata.create_all(bind=engine)
 print(f"Database schema check: {len(Base.metadata.tables)} tables registered")
@@ -255,6 +256,7 @@ app.include_router(classes.router)
 app.include_router(notifications.router)
 app.include_router(billing.router)
 app.include_router(web.router)
+app.include_router(support.router)
 
 
 @app.get("/health")

@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-header"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><div><h1>Support / Help Center</h1><p class="page-sub">Track every issue and conversation with the GYM-NEXUS team.</p></div><a class="receipt-link" href="/app/support/new">Raise a ticket</a></div></header>
+<section class="panel"><h2>My support tickets</h2><table class="data-table"><thead><tr><th>Ticket</th><th>Subject</th><th>Category</th><th>Priority</th><th>Status</th><th>Last updated</th></tr></thead><tbody>
+{% for ticket in tickets %}<tr><td><a class="receipt-link" href="/app/support/{{ ticket.id }}">{{ ticket.ticket_code }}</a></td><td>{{ ticket.subject }}</td><td>{{ ticket.category }}</td><td>{{ ticket.priority.value|title }}</td><td><span class="status-pill status-{{ ticket.status.value }}">{{ ticket.status.value|replace('_',' ')|title }}</span></td><td>{{ ticket.updated_at.strftime('%Y-%m-%d %H:%M') }}</td></tr>{% else %}<tr><td colspan="6" class="empty">No support tickets yet. Raise one when you need us.</td></tr>{% endfor %}
+</tbody></table></section>
+{% endblock %}

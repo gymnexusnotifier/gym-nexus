@@ -215,3 +215,16 @@ def build_gym_owner_welcome_email(gym_name: str, email: str, password: str, logi
         </body></html>
         """
         return subject, body
+
+
+def build_support_ticket_email(ticket_code: str, subject: str, event: str, recipient_name: str = "there") -> tuple[str, str]:
+        email_subject = f"Support ticket {ticket_code}: {event}"
+        body = f"""
+        <html><body style="font-family:Arial,sans-serif;color:#172033;padding:24px;">
+            <h2>Support ticket update</h2>
+            <p>Hi {recipient_name},</p>
+            <p>Your ticket <strong>{ticket_code}</strong> ({subject}) has a new update: <strong>{event}</strong>.</p>
+            <p>Sign in to GYM-NEXUS to read the conversation and respond.</p>
+        </body></html>
+        """
+        return email_subject, body

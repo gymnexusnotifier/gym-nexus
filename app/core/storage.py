@@ -1,10 +1,13 @@
 import os
 import mimetypes
+import uuid
 
 from app.core.config import settings
 
 UPLOAD_DIR = "uploads"
 R2_PREFIX = "member-photos"
+SUPPORT_MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024
+SUPPORT_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
 def _r2_client():
@@ -79,3 +82,21 @@ def member_photo_exists(photo_path: str | None) -> bool:
 
 def member_photo_content_type(photo_path: str) -> str:
     return mimetypes.guess_type(photo_path)[0] or "image/jpeg"
+
+
+def save_support_attachment(gym_id: str, ticket_id: str, file_bytes: bytes, content_type: str, extension: str) -> str:
+    key = f"support/{gym_id}/{ticket_id}/{uuid.uuid4().hex}.{extension.lower()}"
+    client = _r2_client()
+    if client:
+        client.put_object(Bucket=settings.r2_bucket_name, Key=key, Body=file_bytes, ContentType=content_type)
+        return f"r2://{key}"
+    directory = os.path.join(UPLOAD_DIR, "support", str(gym_id), str(ticket_id))
+    os.makedirs(directory, exist_ok=True)
+    path = os.path.join(directory, key.rsplit("/", 1)[-1])
+    with open(path, "wb") as file:
+        file.write(file_bytes)
+    return path
+
+
+def get_support_attachment(storage_path: str) -> bytes:
+    return get_member_photo(storage_path)

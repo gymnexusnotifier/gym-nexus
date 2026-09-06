@@ -7,7 +7,7 @@ from io import BytesIO, StringIO
 
 import numpy as np
 from fastapi import APIRouter, Request, Depends, Form, UploadFile, File
-from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse, StreamingResponse, FileResponse
+from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse, StreamingResponse, FileResponse, Response
 from fastapi.templating import Jinja2Templates
 from PIL import Image
 from sqlalchemy import func
@@ -30,10 +30,15 @@ from app.models.platform_plan import PlatformPlan
 from app.models.activity_log import ActivityLog
 from app.models.user_permission import UserPermission
 from app.services.ai_insights import build_ai_snapshot
+from app.services.chatbot import ask_chatbot, suggested_questions
 from app.services.churn import compute_churn_risk
 from app.services.face_engine import FaceRecognitionService
 from app.services.receipt import generate_receipt_pdf
 from app.core.storage import save_member_photo, get_member_photo, member_photo_exists, member_photo_content_type
+from app.core.storage import get_support_attachment
+from app.models.support import SupportAttachment, SupportAuditEvent, SupportMessage, SupportTicket, TicketPriority, TicketStatus
+from app.services.support import add_attachments, add_message, change_status, create_ticket, get_ticket_for_user, notify_ticket_parties
+from app.schemas.chatbot import ChatbotQuestionRequest
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -394,7 +399,60 @@ def dashboard_page(request: Request, db: Session = Depends(get_db)):
         "busiest_hour": busiest_hour,
         "quietest_hour": quietest_hour,
         "average_visit_minutes": round(sum(visit_durations) / len(visit_durations)) if visit_durations else None,
+        "chatbot_questions": suggested_questions(),
     })
+
+
+@router.post("/app/chatbot/ask")
+def chatbot_ask(payload: ChatbotQuestionRequest, request: Request, db: Session = Depends(get_db)):
+    user, redirect = _require_gym_user(request, db)
+    if redirect:
+        return redirect
+    blocked = _check_web_permission(db, user, "dashboard", "/login")
+    if blocked:
+        return blocked
+
+    gym_id = user.gym_id
+    today = date.today()
+    month_start = today.replace(day=1)
+    facts = {
+        "active_members": db.query(Member).filter(
+            Member.gym_id == gym_id, Member.status == MemberStatus.ACTIVE
+        ).count(),
+        "new_members": db.query(Member).filter(
+            Member.gym_id == gym_id, Member.join_date >= month_start
+        ).count(),
+        "expiring_memberships": db.query(Payment).filter(
+            Payment.gym_id == gym_id,
+            Payment.next_due_date >= today,
+            Payment.next_due_date <= today + timedelta(days=30),
+        ).count(),
+        "expired_members": db.query(Member).filter(
+            Member.gym_id == gym_id, Member.status == MemberStatus.EXPIRED
+        ).count(),
+        "monthly_revenue": db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(
+            Payment.gym_id == gym_id, Payment.payment_date >= month_start
+        ).scalar(),
+        "today_checkins": db.query(Attendance).filter(
+            Attendance.gym_id == gym_id, Attendance.date == today
+        ).count(),
+        "inactive_members": db.query(Member).filter(
+            Member.gym_id == gym_id, Member.status == MemberStatus.FROZEN
+        ).count(),
+    }
+    plan_summary = (
+        db.query(MembershipPlan.name, func.count(Member.id).label("member_count"))
+        .outerjoin(Member, Member.plan_id == MembershipPlan.id)
+        .filter(MembershipPlan.gym_id == gym_id)
+        .group_by(MembershipPlan.name)
+        .order_by(func.count(Member.id).desc())
+        .limit(3)
+        .all()
+    )
+    facts["popular_plans"] = ", ".join(
+        f"{name} ({count})" for name, count in plan_summary if count
+    )
+    return ask_chatbot(payload.question, facts)
 
 
 @router.get("/app/dashboard/report")
@@ -971,6 +1029,228 @@ def trainer_schedule_page(request: Request, db: Session = Depends(get_db)):
         "user_role": user.role.value,
         "classes": class_rows,
     })
+
+
+# ---- Support tickets ----
+
+@router.get("/app/support", response_class=HTMLResponse)
+def support_tickets_page(request: Request, db: Session = Depends(get_db)):
+    user, redirect = _require_gym_user(request, db)
+    if redirect:
+        return redirect
+    gym = db.query(Gym).filter(Gym.id == user.gym_id).first()
+    tickets = db.query(SupportTicket).filter(SupportTicket.owner_id == user.id).order_by(SupportTicket.updated_at.desc()).all()
+    return templates.TemplateResponse(request, "support_tickets.html", {
+        "active_nav": "support", "gym_name": gym.name, "user_role": user.role.value, "tickets": tickets,
+    })
+
+
+@router.get("/app/support/new", response_class=HTMLResponse)
+def new_support_ticket_page(request: Request, db: Session = Depends(get_db)):
+    user, redirect = _require_gym_user(request, db)
+    if redirect:
+        return redirect
+    gym = db.query(Gym).filter(Gym.id == user.gym_id).first()
+    return templates.TemplateResponse(request, "support_new.html", {
+        "active_nav": "support", "gym_name": gym.name, "user_role": user.role.value,
+    })
+
+
+@router.post("/app/support")
+async def create_support_ticket_web(
+    request: Request,
+    subject: str = Form(...), description: str = Form(...), category: str = Form(...),
+    priority: str = Form("normal"), attachments: list[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
+):
+    user, redirect = _require_gym_user(request, db)
+    if redirect:
+        return redirect
+    if user.role != UserRole.GYM_OWNER:
+        return RedirectResponse("/app/support?error=Only+the+gym+owner+can+raise+support+tickets", status_code=303)
+    try:
+        ticket = create_ticket(db, user, subject, description, category, priority)
+        message = db.query(SupportMessage).filter(SupportMessage.ticket_id == ticket.id).first()
+        add_attachments(db, ticket, message, user, attachments)
+        db.commit()
+        notify_ticket_parties(db, ticket, user, "New ticket created")
+        return RedirectResponse(f"/app/support/{ticket.id}", status_code=303)
+    except Exception as exc:
+        db.rollback()
+        return RedirectResponse(f"/app/support/new?error={str(exc).replace(' ', '+')[:180]}", status_code=303)
+
+
+@router.get("/app/support/{ticket_id}", response_class=HTMLResponse)
+def support_ticket_detail_page(ticket_id: str, request: Request, db: Session = Depends(get_db)):
+    user, redirect = _require_gym_user(request, db)
+    if redirect:
+        return redirect
+    try:
+        ticket = get_ticket_for_user(db, uuid.UUID(ticket_id), user)
+    except ValueError:
+        ticket = None
+    if not ticket:
+        return RedirectResponse("/app/support?error=Ticket+not+found", status_code=303)
+    gym = db.query(Gym).filter(Gym.id == ticket.gym_id).first()
+    messages = db.query(SupportMessage).filter(
+        SupportMessage.ticket_id == ticket.id, SupportMessage.is_internal == 0
+    ).order_by(SupportMessage.created_at.asc()).all()
+    attachments = db.query(SupportAttachment).filter(SupportAttachment.ticket_id == ticket.id).all()
+    return templates.TemplateResponse(request, "support_detail.html", {
+        "active_nav": "support", "gym_name": gym.name, "user_role": user.role.value,
+        "ticket": ticket, "messages": messages, "attachments": attachments,
+    })
+
+
+@router.post("/app/support/{ticket_id}/reply")
+async def reply_support_ticket_web(
+    ticket_id: str, request: Request, content: str = Form(...), attachments: list[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
+):
+    user, redirect = _require_gym_user(request, db)
+    if redirect:
+        return redirect
+    try:
+        ticket = get_ticket_for_user(db, uuid.UUID(ticket_id), user)
+    except ValueError:
+        ticket = None
+    if not ticket:
+        return RedirectResponse("/app/support?error=Ticket+not+found", status_code=303)
+    try:
+        message = add_message(db, ticket, user, content)
+        add_attachments(db, ticket, message, user, attachments)
+        if user.role == UserRole.GYM_OWNER and ticket.status in (TicketStatus.RESOLVED, TicketStatus.CLOSED):
+            change_status(db, ticket, user, TicketStatus.REOPENED.value)
+        db.commit()
+        notify_ticket_parties(db, ticket, user, "New reply added")
+    except Exception as exc:
+        db.rollback()
+        return RedirectResponse(f"/app/support/{ticket_id}?error={str(exc).replace(' ', '+')[:180]}", status_code=303)
+    return RedirectResponse(f"/app/support/{ticket_id}", status_code=303)
+
+
+@router.get("/app/support/attachments/{attachment_id}")
+def support_attachment_download(attachment_id: str, request: Request, db: Session = Depends(get_db)):
+    user, redirect = _require_gym_user(request, db)
+    if redirect:
+        return redirect
+    try:
+        attachment = db.query(SupportAttachment).filter(SupportAttachment.id == uuid.UUID(attachment_id)).first()
+    except ValueError:
+        attachment = None
+    if not attachment:
+        return Response(status_code=404)
+    ticket = db.query(SupportTicket).filter(SupportTicket.id == attachment.ticket_id).first()
+    if not ticket or (user.role != UserRole.SUPER_ADMIN and ticket.owner_id != user.id):
+        return Response(status_code=403)
+    try:
+        content = get_support_attachment(attachment.storage_path)
+    except (FileNotFoundError, OSError):
+        return Response(status_code=404)
+    return Response(content=content, media_type=attachment.content_type, headers={"Content-Disposition": f'inline; filename="{attachment.original_name}"'})
+
+
+@router.get("/app/superadmin/support", response_class=HTMLResponse)
+def superadmin_support_page(request: Request, q: str = "", status: str = "", db: Session = Depends(get_db)):
+    user, redirect = _require_superadmin(request, db)
+    if redirect:
+        return redirect
+    query = db.query(SupportTicket).order_by(SupportTicket.updated_at.desc())
+    if q.strip():
+        query = query.filter(SupportTicket.subject.ilike(f"%{q.strip()}%"))
+    if status in {item.value for item in TicketStatus}:
+        query = query.filter(SupportTicket.status == TicketStatus(status))
+    tickets = query.all()
+    ticket_rows = []
+    for ticket in tickets:
+        owner = db.query(User).filter(User.id == ticket.owner_id).first()
+        gym = db.query(Gym).filter(Gym.id == ticket.gym_id).first()
+        ticket_rows.append({"ticket": ticket, "owner_email": owner.email if owner else "Unknown", "gym_name": gym.name if gym else "Unknown"})
+    return templates.TemplateResponse(request, "superadmin_support.html", {
+        "active_section": "support", "user_role": user.role.value, "tickets": ticket_rows, "q": q, "selected_status": status,
+    })
+
+
+@router.get("/app/superadmin/support/{ticket_id}", response_class=HTMLResponse)
+def superadmin_support_detail(ticket_id: str, request: Request, db: Session = Depends(get_db)):
+    user, redirect = _require_superadmin(request, db)
+    if redirect:
+        return redirect
+    try:
+        ticket = db.query(SupportTicket).filter(SupportTicket.id == uuid.UUID(ticket_id)).first()
+    except ValueError:
+        ticket = None
+    if not ticket:
+        return RedirectResponse("/app/superadmin/support?error=Ticket+not+found", status_code=303)
+    messages = db.query(SupportMessage).filter(SupportMessage.ticket_id == ticket.id).order_by(SupportMessage.created_at.asc()).all()
+    attachments = db.query(SupportAttachment).filter(SupportAttachment.ticket_id == ticket.id).all()
+    audits = db.query(SupportAuditEvent).filter(SupportAuditEvent.ticket_id == ticket.id).order_by(SupportAuditEvent.created_at.asc()).all()
+    owner = db.query(User).filter(User.id == ticket.owner_id).first()
+    gym = db.query(Gym).filter(Gym.id == ticket.gym_id).first()
+    return templates.TemplateResponse(request, "superadmin_support_detail.html", {
+        "active_section": "support", "user_role": user.role.value, "ticket": ticket, "messages": messages,
+        "attachments": attachments, "audits": audits, "owner": owner, "gym": gym,
+        "statuses": list(TicketStatus), "priorities": list(TicketPriority),
+    })
+
+
+@router.post("/app/superadmin/support/{ticket_id}/reply")
+async def superadmin_support_reply(ticket_id: str, request: Request, content: str = Form(...), attachments: list[UploadFile] = File(default=[]), db: Session = Depends(get_db)):
+    user, redirect = _require_superadmin(request, db)
+    if redirect:
+        return redirect
+    ticket = db.query(SupportTicket).filter(SupportTicket.id == uuid.UUID(ticket_id)).first()
+    if not ticket:
+        return RedirectResponse("/app/superadmin/support?error=Ticket+not+found", status_code=303)
+    try:
+        message = add_message(db, ticket, user, content)
+        add_attachments(db, ticket, message, user, attachments)
+        db.commit()
+        notify_ticket_parties(db, ticket, user, "New reply from platform support")
+    except Exception as exc:
+        db.rollback()
+        return RedirectResponse(f"/app/superadmin/support/{ticket_id}?error={str(exc).replace(' ', '+')[:180]}", status_code=303)
+    return RedirectResponse(f"/app/superadmin/support/{ticket_id}", status_code=303)
+
+
+@router.post("/app/superadmin/support/{ticket_id}/status")
+def superadmin_support_status(ticket_id: str, request: Request, new_status: str = Form(...), resolution: str = Form(""), priority: str = Form(""), db: Session = Depends(get_db)):
+    user, redirect = _require_superadmin(request, db)
+    if redirect:
+        return redirect
+    ticket = db.query(SupportTicket).filter(SupportTicket.id == uuid.UUID(ticket_id)).first()
+    if not ticket:
+        return RedirectResponse("/app/superadmin/support?error=Ticket+not+found", status_code=303)
+    try:
+        if priority:
+            ticket.priority = TicketPriority(priority)
+            ticket.updated_at = datetime.utcnow()
+            add_audit = SupportAuditEvent(ticket_id=ticket.id, actor_id=user.id, event_type="priority_changed", details=f"Priority set to {priority}")
+            db.add(add_audit)
+        change_status(db, ticket, user, new_status, resolution)
+        db.commit()
+        notify_ticket_parties(db, ticket, user, f"Ticket status changed to {new_status.replace('_', ' ')}")
+    except Exception as exc:
+        db.rollback()
+        return RedirectResponse(f"/app/superadmin/support/{ticket_id}?error={str(exc).replace(' ', '+')[:180]}", status_code=303)
+    return RedirectResponse(f"/app/superadmin/support/{ticket_id}", status_code=303)
+
+
+@router.post("/app/superadmin/support/{ticket_id}/note")
+def superadmin_support_note(ticket_id: str, request: Request, content: str = Form(...), db: Session = Depends(get_db)):
+    user, redirect = _require_superadmin(request, db)
+    if redirect:
+        return redirect
+    ticket = db.query(SupportTicket).filter(SupportTicket.id == uuid.UUID(ticket_id)).first()
+    if not ticket:
+        return RedirectResponse("/app/superadmin/support?error=Ticket+not+found", status_code=303)
+    try:
+        add_message(db, ticket, user, content, is_internal=True)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        return RedirectResponse(f"/app/superadmin/support/{ticket_id}?error={str(exc).replace(' ', '+')[:180]}", status_code=303)
+    return RedirectResponse(f"/app/superadmin/support/{ticket_id}", status_code=303)
 
 
 # ---- Notifications ----
