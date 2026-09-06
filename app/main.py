@@ -90,7 +90,6 @@ async def lifespan(app: FastAPI):
     ensure_default_superadmin()
 
     # start APScheduler job for inquiry follow-up reminders (guarded)
-    from app.core.config import settings
     if settings.brevo_api_key and (settings.from_email or settings.smtp_user):
         email_transport = "Brevo HTTPS API"
     elif settings.brevo_api_key:

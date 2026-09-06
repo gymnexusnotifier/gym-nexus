@@ -217,6 +217,19 @@ def build_gym_owner_welcome_email(gym_name: str, email: str, password: str, logi
         return subject, body
 
 
+def build_password_reset_email(email: str, reset_url: str) -> tuple[str, str]:
+        subject = "Reset your GYM-NEXUS password"
+        body = f"""
+        <html><body style="font-family:Arial,sans-serif;color:#172033;padding:24px;">
+            <h2>Password reset requested</h2>
+            <p>We received a request to reset the password for <strong>{email}</strong>.</p>
+            <p><a href="{reset_url}" style="display:inline-block;padding:12px 18px;background:#0e7490;color:#fff;text-decoration:none;border-radius:8px;">Choose a new password</a></p>
+            <p>This link expires in 30 minutes. If you did not request this, you can safely ignore this email.</p>
+        </body></html>
+        """
+        return subject, body
+
+
 def build_support_ticket_email(ticket_code: str, subject: str, event: str, recipient_name: str = "there") -> tuple[str, str]:
         email_subject = f"Support ticket {ticket_code}: {event}"
         body = f"""

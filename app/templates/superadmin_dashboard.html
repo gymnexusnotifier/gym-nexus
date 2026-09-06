@@ -122,7 +122,7 @@
                 <div class="form-grid">
                   <label>Gym name<input type="text" name="name" value="{{ g.name }}" required></label>
                   <label>Owner email<input type="email" name="owner_email" value="{{ g.owner_email }}"></label>
-                  <label>New owner password<input type="password" name="owner_password" placeholder="Leave blank to keep current password"></label>
+                  <label>New owner password (optional)<input type="password" name="owner_password" minlength="8" placeholder="Leave blank to keep current password"></label>
                   <label>Platform plan<select name="platform_plan_id" required>
                     {% for plan in plans %}<option value="{{ plan.id }}" {% if g.plan_id == plan.id|string %}selected{% endif %}>{{ plan.name }} (Rs. {{ plan.price }})</option>{% endfor %}
                   </select></label>

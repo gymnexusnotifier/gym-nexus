@@ -9,6 +9,7 @@ import numpy as np
 from fastapi import APIRouter, Request, Depends, Form, UploadFile, File
 from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse, StreamingResponse, FileResponse, Response
 from fastapi.templating import Jinja2Templates
+from jose import JWTError
 from PIL import Image
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -16,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import verify_password, decode_access_token, create_access_token, hash_password
-from app.core.email import send_email, build_payment_confirmation_email, build_staff_invitation_email, build_gym_owner_welcome_email
+from app.core.email import send_email, build_payment_confirmation_email, build_staff_invitation_email, build_gym_owner_welcome_email, build_password_reset_email
 from app.core.deps import has_permission
 from app.core.razorpay_client import get_razorpay_client
 from app.models.user import User
@@ -220,8 +221,64 @@ def root(request: Request, db: Session = Depends(get_db)):
 
 
 @router.get("/login", response_class=HTMLResponse)
-def login_page(request: Request, error: str = None):
-    return templates.TemplateResponse(request, "login.html", {"error": error})
+def login_page(request: Request, error: str = None, success: str = None):
+    return templates.TemplateResponse(request, "login.html", {"error": error, "success": success})
+
+
+@router.get("/forgot-password", response_class=HTMLResponse)
+def forgot_password_page(request: Request, error: str = None, success: str = None):
+    return templates.TemplateResponse(request, "forgot_password.html", {"error": error, "success": success})
+
+
+@router.post("/forgot-password")
+def forgot_password_submit(request: Request, email: str = Form(...), db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email.strip()).first()
+    if user:
+        reset_token = create_access_token(
+            {"sub": str(user.id), "purpose": "password_reset"},
+            expires_delta=timedelta(minutes=30),
+        )
+        reset_url = f"{settings.public_url.rstrip('/') if settings.public_url else str(request.base_url).rstrip('/')}/reset-password?token={reset_token}"
+        subject, body = build_password_reset_email(user.email, reset_url)
+        send_email(user.email, subject, body, is_html=True)
+    return RedirectResponse(
+        "/forgot-password?success=If+an+account+matches+that+email,+a+reset+link+has+been+sent",
+        status_code=303,
+    )
+
+
+@router.get("/reset-password", response_class=HTMLResponse)
+def reset_password_page(request: Request, token: str = "", error: str = None):
+    return templates.TemplateResponse(request, "reset_password.html", {"token": token, "error": error})
+
+
+@router.post("/reset-password")
+def reset_password_submit(
+    token: str = Form(...),
+    password: str = Form(...),
+    password_confirmation: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    if len(password) < 8:
+        return RedirectResponse("/reset-password?error=Password+must+be+at+least+8+characters", status_code=303)
+    if password != password_confirmation:
+        return RedirectResponse("/reset-password?error=Passwords+do+not+match", status_code=303)
+    try:
+        payload = decode_access_token(token)
+    except JWTError:
+        return RedirectResponse("/forgot-password?error=This+reset+link+is+invalid+or+has+expired", status_code=303)
+    if payload.get("purpose") != "password_reset":
+        return RedirectResponse("/forgot-password?error=This+reset+link+is+invalid+or+has+expired", status_code=303)
+    try:
+        user_id = uuid.UUID(payload["sub"])
+    except (KeyError, ValueError):
+        return RedirectResponse("/forgot-password?error=This+reset+link+is+invalid+or+has+expired", status_code=303)
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return RedirectResponse("/forgot-password?error=This+reset+link+is+invalid+or+has+expired", status_code=303)
+    user.hashed_password = hash_password(password)
+    db.commit()
+    return RedirectResponse("/login?success=Password+updated.+You+can+now+sign+in", status_code=303)
 
 
 @router.post("/login")
@@ -2398,6 +2455,9 @@ def update_gym_web(
     if not gym:
         return RedirectResponse("/app/superadmin?error=Gym+not+found", status_code=303)
 
+    if owner_password and len(owner_password.strip()) < 8:
+        return RedirectResponse("/app/superadmin?error=Owner+password+must+be+at+least+8+characters", status_code=303)
+
     if not platform_plan_id:
         return RedirectResponse("/app/superadmin?error=Platform+plan+is+required+for+every+gym", status_code=303)
 
@@ -2416,9 +2476,9 @@ def update_gym_web(
     if gym.subscription_status == "trial" and not gym.trial_ends_at:
         gym.trial_ends_at = date.today() + timedelta(days=14)
 
+    owner = db.query(User).filter(User.gym_id == gym.id, User.role == UserRole.GYM_OWNER).first()
     if owner_email and owner_email.strip():
         normalized_email = owner_email.strip()
-        owner = db.query(User).filter(User.gym_id == gym.id, User.role == UserRole.GYM_OWNER).first()
         if owner is None:
             owner = User(gym_id=gym.id, email=normalized_email, hashed_password=hash_password(owner_password or "gymowner123"), role=UserRole.GYM_OWNER)
             db.add(owner)
@@ -2429,6 +2489,8 @@ def update_gym_web(
             owner.email = normalized_email
             if owner_password and owner_password.strip():
                 owner.hashed_password = hash_password(owner_password.strip())
+    elif owner and owner_password and owner_password.strip():
+        owner.hashed_password = hash_password(owner_password.strip())
 
     db.commit()
     return RedirectResponse("/app/superadmin?success=Gym+updated+successfully", status_code=303)
