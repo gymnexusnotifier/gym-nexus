@@ -8,6 +8,8 @@ from sqlalchemy import inspect, text
 from app.core.email import send_email
 from app.core.security import hash_password
 from app.core.security import decode_access_token
+from app.core.config import settings
+from app.core.mongodb import close_mongodb, initialize_mongodb, mongo_health
 from app.models.enums import UserRole
 from app.models.gym import Gym
 from app.models.user import User
@@ -80,6 +82,10 @@ def ensure_default_superadmin() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.db_backend == "mongo":
+        initialize_mongodb()
+        print(f"MongoDB connection ready: database={settings.mongodb_database}")
+
     # create default superadmin and then start background scheduler
     ensure_default_superadmin()
 
@@ -213,6 +219,8 @@ async def lifespan(app: FastAPI):
                 scheduler.shutdown(wait=False)
         except Exception:
             pass
+        if settings.db_backend == "mongo":
+            close_mongodb()
 
 
 app = FastAPI(title="Gym SaaS Platform | AI Attendance & Growth", lifespan=lifespan)
@@ -261,4 +269,7 @@ app.include_router(support.router)
 
 @app.get("/health")
 def health_check():
-    return {"status": "ok"}
+    response = {"status": "ok", "db_backend": settings.db_backend}
+    if settings.db_backend == "mongo":
+        response["mongodb"] = mongo_health()
+    return response

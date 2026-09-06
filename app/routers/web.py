@@ -664,6 +664,7 @@ def update_member_web(
     contact: str = Form(""),
     email: str = Form(""),
     status: str = Form(...),
+    plan_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     user, redirect = _require_gym_user(request, db)
@@ -686,9 +687,9 @@ def update_member_web(
         except ValueError:
             pass
 
-    if request.form.get("plan_id"):
+    if plan_id:
         try:
-            selected_plan_id = uuid.UUID(request.form.get("plan_id"))
+            selected_plan_id = uuid.UUID(plan_id)
             plan = db.query(MembershipPlan).filter(MembershipPlan.id == selected_plan_id, MembershipPlan.gym_id == user.gym_id).first()
             if not plan:
                 return RedirectResponse(f"/app/members/{member_id}?error=Selected+plan+not+found", status_code=303)

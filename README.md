@@ -39,7 +39,7 @@ The application follows a single-service deployment pattern:
 - backend: FastAPI
 - ORM: SQLAlchemy
 - templates: Jinja2
-- database: SQLite for local/dev, PostgreSQL recommended for production
+- database: SQLAlchemy SQL backend by default, with staged MongoDB infrastructure
 - authentication: JWT
 - document / email: SMTP with Brevo
 - attendance: same app handles browser camera workflows
@@ -132,7 +132,10 @@ pip install -r requirements.txt
 Create environment variables in `.env`:
 
 ```env
+DB_BACKEND=sql
 DATABASE_URL=sqlite:///./gym_saas.db
+MONGODB_URL=mongodb+srv://username:password@cluster.mongodb.net
+MONGODB_DATABASE=gym_nexus
 JWT_SECRET_KEY=replace_with_a_secure_secret
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
@@ -147,6 +150,20 @@ RAZORPAY_KEY_ID=
 RAZORPAY_KEY_SECRET=
 RAZORPAY_WEBHOOK_SECRET=
 ```
+
+### Database backend flag
+
+`DB_BACKEND` accepts `sql` or `mongo` and defaults to `sql`. The SQL path remains
+independent and is the authoritative application backend during this staged
+migration. With `DB_BACKEND=mongo`, the app validates the MongoDB connection,
+creates the MongoDB indexes, reports MongoDB status from `/health`, and keeps the
+SQL backend available for the existing routes while Mongo repositories are being
+migrated feature by feature. It does not silently fall back to SQL if MongoDB is
+selected or misconfigured.
+
+MongoDB transactions require MongoDB Atlas or a replica-set deployment. A
+standalone MongoDB server is suitable for connectivity and index checks, but not
+for the multi-document transaction behavior used by the application.
 
 For Railway deployments, configure `BREVO_API_KEY` and `FROM_EMAIL` as service variables. When `BREVO_API_KEY` is present, the app uses Brevo's HTTPS API instead of SMTP, avoiding Railway SMTP port restrictions.
 

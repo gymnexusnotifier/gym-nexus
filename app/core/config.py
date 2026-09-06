@@ -1,8 +1,14 @@
+from typing import Literal
+
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    db_backend: Literal["sql", "mongo"] = "sql"
     database_url: str = "sqlite:///./gym_saas.db"
+    mongodb_url: str = ""
+    mongodb_database: str = "gym_nexus"
     jwt_secret_key: str = "change_this_to_a_real_secret"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 1440
@@ -19,6 +25,13 @@ class Settings(BaseSettings):
     brevo_sender_name: str = "GYM-NEXUS"
     scheduler_enabled: bool = True
     public_url: str = ""  # optional public base URL used in emails (e.g. https://app.example.com)
+
+    @field_validator("mongodb_url")
+    @classmethod
+    def validate_mongodb_url(cls, value: str) -> str:
+        if value and not value.startswith(("mongodb://", "mongodb+srv://")):
+            raise ValueError("MONGODB_URL must start with mongodb:// or mongodb+srv://")
+        return value
 
     razorpay_key_id: str = ""
     razorpay_key_secret: str = ""

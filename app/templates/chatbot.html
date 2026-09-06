@@ -1,5 +1,5 @@
 <div class="chatbot-root" data-chatbot>
-  <button class="chatbot-launcher" type="button" data-chatbot-open aria-label="Open Gym Assistant">
+  <button class="chatbot-launcher" type="button" data-chatbot-open aria-label="Open Gym Assistant" aria-expanded="false">
     <span class="chatbot-launcher-mark" aria-hidden="true">?</span>
     <span>Ask assistant</span>
   </button>
@@ -10,7 +10,7 @@
         <div class="chatbot-kicker">GYM-NEXUS</div>
         <h2>Gym Assistant</h2>
       </div>
-      <button class="chatbot-close" type="button" data-chatbot-close aria-label="Close Gym Assistant">&times;</button>
+      <button class="chatbot-close" type="button" data-chatbot-close aria-label="Minimize Gym Assistant">&times;</button>
     </header>
 
     <div class="chatbot-messages" data-chatbot-messages aria-live="polite"></div>
@@ -37,6 +37,8 @@
     const suggestions = root.querySelector('[data-chatbot-suggestions]');
     const form = root.querySelector('[data-chatbot-form]');
     const input = root.querySelector('[data-chatbot-input]');
+    const openButton = root.querySelector('[data-chatbot-open]');
+    const closeButton = root.querySelector('[data-chatbot-close]');
     const sendButton = form.querySelector('button');
     let isReplying = false;
     let hasWelcomed = false;
@@ -105,8 +107,9 @@
       }
     };
 
-    root.querySelector('[data-chatbot-open]').addEventListener('click', () => {
+    openButton.addEventListener('click', () => {
       windowElement.hidden = false;
+      openButton.setAttribute('aria-expanded', 'true');
       if (!hasWelcomed) {
         addMessage("Hi! I'm your Gym Assistant. How can I help you?", 'assistant');
         hasWelcomed = true;
@@ -114,7 +117,11 @@
       input.focus();
       scrollToLatest();
     });
-    root.querySelector('[data-chatbot-close]').addEventListener('click', () => { windowElement.hidden = true; });
+    closeButton.addEventListener('click', () => {
+      windowElement.hidden = true;
+      openButton.setAttribute('aria-expanded', 'false');
+      openButton.focus();
+    });
     suggestions.addEventListener('click', (event) => {
       const button = event.target.closest('[data-chatbot-question]');
       if (button) ask(button.dataset.chatbotQuestion);
