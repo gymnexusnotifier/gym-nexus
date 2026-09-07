@@ -2125,11 +2125,10 @@ def superadmin_dashboard(
 
     # load reminder time from DB
     try:
-       from app.core.settings_db import ensure_table, get_setting
-       ensure_table()
-       reminder_time = get_setting('followup_reminder_time')
+          from app.core.settings_db import get_setting
+          reminder_time = get_setting('followup_reminder_time')
     except Exception:
-       reminder_time = None
+          reminder_time = None
 
     return templates.TemplateResponse(request, "superadmin_dashboard.html", {
         "active_section": active_section,
@@ -2205,8 +2204,7 @@ def set_reminder_time(request: Request, reminder_time: str = Form(''), db: Sessi
             return RedirectResponse('/app/superadmin?error=Invalid+time+format+expected+HH:MM', status_code=303)
 
         try:
-            from app.core.settings_db import ensure_table, set_setting
-            ensure_table()
+            from app.core.settings_db import set_setting
             set_setting('followup_reminder_time', f"{h:02d}:{m:02d}")
             return RedirectResponse('/app/superadmin?success=Reminder+time+updated', status_code=303)
         except Exception as exc:

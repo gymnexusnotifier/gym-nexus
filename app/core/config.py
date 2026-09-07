@@ -1,12 +1,15 @@
 from typing import Literal
 
-from pydantic import field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     db_backend: Literal["sql", "mongo"] = "sql"
-    database_url: str = "sqlite:///./gym_saas.db"
+    database_url: str = Field(
+        default="postgresql+psycopg2://postgres:postgres@localhost:5432/gym_nexus",
+        validation_alias=AliasChoices("DATABASE_URL", "POSTGRES_URI"),
+    )
     mongodb_url: str = ""
     mongodb_database: str = "gym_nexus"
     jwt_secret_key: str = "change_this_to_a_real_secret"
@@ -25,6 +28,13 @@ class Settings(BaseSettings):
     brevo_sender_name: str = "GYM-NEXUS"
     scheduler_enabled: bool = True
     public_url: str = ""  # optional public base URL used in emails (e.g. https://app.example.com)
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        if isinstance(value, str) and value.startswith("postgres://"):
+            return "postgresql+psycopg2://" + value[len("postgres://") :]
+        return value
 
     @field_validator("mongodb_url")
     @classmethod

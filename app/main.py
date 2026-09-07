@@ -3,8 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.core.database import Base, SessionLocal, engine
-from sqlalchemy import inspect, text
+from app.core.database import SessionLocal
 from app.core.email import send_email
 from app.core.security import hash_password
 from app.core.security import decode_access_token
@@ -23,26 +22,6 @@ from app.models.payment import Payment
 from app.models.platform_plan import PlatformPlan
 from app.models.support import SupportTicket, SupportMessage, SupportAttachment, SupportAuditEvent
 from app.routers import auth, members, users, attendance, payments, dashboard, churn, classes, notifications, billing, web, support
-
-Base.metadata.create_all(bind=engine)
-print(f"Database schema check: {len(Base.metadata.tables)} tables registered")
-
-
-def ensure_payment_columns() -> None:
-    inspector = inspect(engine)
-    columns = {column["name"] for column in inspector.get_columns("payments")}
-    statements = []
-    if "payment_method" not in columns:
-        statements.append("ALTER TABLE payments ADD COLUMN payment_method VARCHAR NOT NULL DEFAULT 'cash'")
-    if "transaction_id" not in columns:
-        statements.append("ALTER TABLE payments ADD COLUMN transaction_id VARCHAR")
-    if statements:
-        with engine.begin() as connection:
-            for statement in statements:
-                connection.execute(text(statement))
-
-
-ensure_payment_columns()
 
 DEFAULT_SUPERADMIN_EMAIL = "faisal.khalik.khan@gmail.com"
 DEFAULT_SUPERADMIN_PASSWORD = "Uzma#2025"
@@ -151,8 +130,7 @@ async def lifespan(app: FastAPI):
                         tomorrow = today + timedelta(days=1)
 
                         try:
-                            from app.core.settings_db import ensure_table, get_setting
-                            ensure_table()
+                            from app.core.settings_db import get_setting
                             cfg_time = get_setting('followup_reminder_time', '08:00') or '08:00'
                         except Exception:
                             cfg_time = '08:00'

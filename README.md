@@ -133,7 +133,7 @@ Create environment variables in `.env`:
 
 ```env
 DB_BACKEND=sql
-DATABASE_URL=sqlite:///./gym_saas.db
+DATABASE_URL=postgresql+psycopg2://user:password@host:5432/gym_nexus
 MONGODB_URL=mongodb+srv://username:password@cluster.mongodb.net
 MONGODB_DATABASE=gym_nexus
 JWT_SECRET_KEY=replace_with_a_secure_secret
@@ -167,22 +167,32 @@ for the multi-document transaction behavior used by the application.
 
 For Railway deployments, configure `BREVO_API_KEY` and `FROM_EMAIL` as service variables. When `BREVO_API_KEY` is present, the app uses Brevo's HTTPS API instead of SMTP, avoiding Railway SMTP port restrictions.
 
-For production, swap SQLite for PostgreSQL:
+The SQL schema is managed with Alembic. Apply migrations before starting the
+application:
 
-```env
-DATABASE_URL=postgresql://user:password@host:5432/gymdb
+```bash
+alembic upgrade head
 ```
+
+For local development, PostgreSQL is the default SQL backend. Set
+`DATABASE_URL` to the connection string for your local or hosted PostgreSQL
+instance. The initial revision creates all application tables, including
+`app_settings`.
 
 ### Step 2: Run the app as a single service
 Use one Railway service only.
 
 This repository is configured for direct Railway deployment with a single app service and a `uvicorn` start command.
 
-Start command:
+Start command for a manually managed environment:
 
 ```bash
+alembic upgrade head
 uvicorn app.main:app --host 0.0.0.0 --port $PORT
 ```
+
+Railway runs `alembic upgrade head` automatically before Uvicorn through the
+repository deployment configuration.
 
 Railway direct deploy files included in the repo:
 - `railway.json`
