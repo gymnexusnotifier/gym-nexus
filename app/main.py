@@ -3,7 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.core.database import SessionLocal
+from app.core.database import Base, SessionLocal, engine
+from sqlalchemy import inspect
 from app.core.email import send_email
 from app.core.security import hash_password
 from app.core.security import decode_access_token
@@ -26,6 +27,18 @@ from app.routers import auth, members, users, attendance, payments, dashboard, c
 DEFAULT_SUPERADMIN_EMAIL = "faisal.khalik.khan@gmail.com"
 DEFAULT_SUPERADMIN_PASSWORD = "Uzma#2025"
 DEFAULT_SUPERADMIN_NAME = "Nexus-Admin"
+
+
+def ensure_database_schema() -> None:
+    if settings.db_backend != "sql":
+        return
+
+    inspector = inspect(engine)
+    if inspector.has_table("users"):
+        return
+
+    print("Database schema is missing; initializing SQLAlchemy tables as a startup fallback")
+    Base.metadata.create_all(bind=engine)
 
 
 def ensure_default_superadmin() -> None:
@@ -64,6 +77,8 @@ async def lifespan(app: FastAPI):
     if settings.db_backend == "mongo":
         initialize_mongodb()
         print(f"MongoDB connection ready: database={settings.mongodb_database}")
+
+    ensure_database_schema()
 
     # create default superadmin and then start background scheduler
     ensure_default_superadmin()
