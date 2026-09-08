@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Payroll & Expenses | GYM-NEXUS{% endblock %}
+{% block content %}
+<header class="page-header"><h1>Payroll &amp; Expenses</h1><p class="page-sub">Track money released to the team and money spent keeping the gym moving.</p></header>
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}{% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
+<section class="stat-grid">
+  <div class="stat-card"><span>This month payroll</span><strong>Rs. {{ "%.2f"|format(payroll_total|float) }}</strong></div>
+  <div class="stat-card"><span>Other expenses</span><strong>Rs. {{ "%.2f"|format(expense_total|float) }}</strong></div>
+  <div class="stat-card"><span>Total expenses</span><strong>Rs. {{ "%.2f"|format(combined_total|float) }}</strong></div>
+</section>
+<section class="panel"><h2>Release salary</h2>
+<form method="post" action="/app/payroll" class="inline-form">
+  <select name="staff_id" required><option value="">Staff member</option>{% for member in staff %}<option value="{{ member.id }}">{{ member.email }} ({{ member.role.value }})</option>{% endfor %}</select>
+  <input type="number" name="pay_rate" step="0.01" min="0.01" placeholder="Gross pay (Rs.)" required>
+  <select name="pay_frequency" required>{% for frequency in frequencies %}<option value="{{ frequency }}">{{ frequency|replace('-', ' ')|title }}</option>{% endfor %}</select>
+  <input type="date" name="pay_period_start" required><input type="date" name="pay_period_end" required>
+  <input type="number" name="days_in_period" step="0.5" min="0.5" placeholder="Days in period" required>
+  <span id="leave-summary" class="page-sub">Select staff, dates, rate, and period days to calculate unpaid leave.</span>
+  <input type="number" name="leave_deduction_amount" step="0.01" min="0" placeholder="Leave deduction override (optional)">
+  <input type="text" name="leave_deduction_override_note" placeholder="Override reason (optional)">
+  <input type="number" name="other_deductions" step="0.01" min="0" value="0" placeholder="Other deductions">
+  <input type="text" name="other_deductions_note" placeholder="Deduction note (optional)">
+  <button type="submit">Release salary &amp; send payslip</button>
+</form><p class="page-sub">Net amount is calculated as gross pay minus leave deduction and other deductions. The email and PDF record the release.</p></section>
+<section class="panel"><h2>Staff salaries</h2><table class="data-table"><thead><tr><th>Staff</th><th>Period</th><th>Gross</th><th>Net</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+{% for record in records %}<tr><td>{{ staff_by_id[record.staff_id|string].email if staff_by_id[record.staff_id|string] else record.staff_id }}</td><td class="mono">{{ record.pay_period_start }} - {{ record.pay_period_end }}</td><td>Rs. {{ "%.2f"|format(record.gross_amount|float) }}</td><td>Rs. {{ "%.2f"|format(record.net_amount|float) }}</td><td>{{ record.status.value|title }}</td><td>{% if record.status.value == 'released' %}<a class="receipt-link" href="/app/payroll/{{ record.id }}/payslip">Download</a> <form method="post" action="/app/payroll/{{ record.id }}/resend" style="display:inline"><button type="submit">Resend</button></form>{% else %}Pending{% endif %}</td></tr>
+{% else %}<tr><td colspan="6" class="empty">No salary records yet.</td></tr>{% endfor %}</tbody></table></section>
+<section class="panel"><h2>Add expense</h2><form method="post" action="/app/payroll/expenses" class="inline-form"><select name="category" required>{% for item in categories %}<option value="{{ item }}">{{ item|title }}</option>{% endfor %}</select><input type="number" name="amount" step="0.01" min="0.01" placeholder="Amount (Rs.)" required><input type="date" name="expense_date" required><input type="text" name="description" placeholder="Description" required><button type="submit">Add expense</button></form></section>
+<section class="panel"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;"><h2>Expenses</h2><a class="receipt-link" href="/app/payroll/report">Download summary PDF</a></div><form method="get" action="/app/payroll" class="inline-form"><select name="category"><option value="">All categories</option>{% for item in categories %}<option value="{{ item }}" {% if selected_category == item %}selected{% endif %}>{{ item|title }}</option>{% endfor %}</select><input type="date" name="start_date"><input type="date" name="end_date"><button type="submit">Filter</button></form><table class="data-table"><thead><tr><th>Date</th><th>Category</th><th>Description</th><th>Amount</th></tr></thead><tbody>{% for expense in expenses %}<tr><td class="mono">{{ expense.date }}</td><td>{{ expense.category.value|title }}</td><td>{{ expense.description }}</td><td>Rs. {{ "%.2f"|format(expense.amount|float) }}</td></tr>{% else %}<tr><td colspan="4" class="empty">No expenses logged yet.</td></tr>{% endfor %}</tbody></table></section>
+<script>
+  const salaryForm = document.querySelector('form[action="/app/payroll"]');
+  const leaveSummary = document.getElementById('leave-summary');
+  const previewFields = ['staff_id', 'pay_period_start', 'pay_period_end', 'pay_rate', 'days_in_period'];
+  async function refreshLeavePreview() {
+    const values = Object.fromEntries(previewFields.map((name) => [name, salaryForm.elements[name].value]));
+    if (previewFields.some((name) => !values[name])) return;
+    const query = new URLSearchParams(values);
+    const response = await fetch(`/payroll/leave-preview?${query}`);
+    if (!response.ok) return;
+    const preview = await response.json();
+    leaveSummary.textContent = `Unpaid leave found: ${preview.unpaid_leave_days} days | Per-day rate: Rs. ${preview.per_day_rate} | Leave deduction: Rs. ${preview.leave_deduction_amount} | Net before other deductions: Rs. ${preview.net_amount}`;
+  }
+  previewFields.forEach((name) => salaryForm.elements[name].addEventListener('change', refreshLeavePreview));
+  previewFields.forEach((name) => salaryForm.elements[name].addEventListener('input', refreshLeavePreview));
+</script>
+{% endblock %}

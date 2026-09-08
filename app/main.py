@@ -22,7 +22,10 @@ from app.models.member import Member, MembershipPlan
 from app.models.payment import Payment
 from app.models.platform_plan import PlatformPlan
 from app.models.support import SupportTicket, SupportMessage, SupportAttachment, SupportAuditEvent
-from app.routers import auth, members, users, attendance, payments, dashboard, churn, classes, notifications, billing, web, support
+from app.models.expense import Expense
+from app.models.payroll import PayrollRecord
+from app.models.staff_leave import StaffLeave
+from app.routers import auth, members, users, attendance, payments, dashboard, churn, classes, notifications, billing, web, support, payroll, leave
 
 DEFAULT_SUPERADMIN_EMAIL = "faisal.khalik.khan@gmail.com"
 DEFAULT_SUPERADMIN_PASSWORD = "Uzma#2025"
@@ -250,6 +253,8 @@ app.include_router(members.router)
 app.include_router(members.plans_router)
 app.include_router(attendance.router)
 app.include_router(payments.router)
+app.include_router(payroll.router)
+app.include_router(leave.router)
 app.include_router(dashboard.router)
 app.include_router(churn.router)
 app.include_router(classes.router)

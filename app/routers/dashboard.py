@@ -11,6 +11,9 @@ from app.core.deps import require_permission, get_current_gym_id
 from app.models.member import Member, MemberStatus
 from app.models.attendance import Attendance
 from app.models.payment import Payment
+from app.models.expense import Expense
+from app.models.payroll import PayrollRecord
+from app.models.enums import PayrollStatus
 from app.schemas.dashboard import DashboardSummary, PeakHourEntry
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -48,6 +51,13 @@ def dashboard_summary(
     monthly_revenue = db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(
         Payment.gym_id == gym_id, Payment.payment_date >= month_start
     ).scalar()
+    monthly_expenses = db.query(func.coalesce(func.sum(Expense.amount), 0)).filter(
+        Expense.gym_id == gym_id, Expense.date >= month_start, Expense.deleted_at.is_(None)
+    ).scalar() or 0
+    monthly_payroll = db.query(func.coalesce(func.sum(PayrollRecord.net_amount), 0)).filter(
+        PayrollRecord.gym_id == gym_id, PayrollRecord.released_date >= month_start,
+        PayrollRecord.status == PayrollStatus.RELEASED, PayrollRecord.deleted_at.is_(None)
+    ).scalar() or 0
 
     return DashboardSummary(
         today_checkins=today_checkins,
@@ -56,6 +66,7 @@ def dashboard_summary(
         expired_members=expired_members,
         frozen_members=frozen_members,
         monthly_revenue=monthly_revenue,
+        total_expenses_this_month=monthly_expenses + monthly_payroll,
     )
 
 

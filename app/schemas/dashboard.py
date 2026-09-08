@@ -10,6 +10,7 @@ class DashboardSummary(BaseModel):
     expired_members: int
     frozen_members: int
     monthly_revenue: Decimal
+    total_expenses_this_month: Decimal = Decimal("0")
 
 
 class PeakHourEntry(BaseModel):

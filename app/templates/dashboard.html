@@ -36,6 +36,11 @@
     <div class="stat-label">Revenue this month</div>
     <div class="stat-value mono">Rs. {{ "%.0f"|format(monthly_revenue) }}</div>
   </div>
+  <div class="stat-card">
+    <div class="stat-label">Expenses this month</div>
+    <div class="stat-value mono">Rs. {{ "%.0f"|format(total_expenses_this_month|default(0)) }}</div>
+    {% if user_role == "gym_owner" %}<div class="stat-sub" style="margin-top:8px;color:var(--ink-soft);font-size:13px;"><a href="/app/payroll" style="color:var(--accent);">Open payroll</a></div>{% endif %}
+  </div>
 </section>
 
 <section class="panels">

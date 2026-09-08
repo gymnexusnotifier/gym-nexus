@@ -168,6 +168,34 @@ def build_payment_confirmation_email(gym_name: str, member_name: str, amount, pa
         return subject, body
 
 
+def build_payslip_email(gym_name: str, staff_email: str, payroll) -> tuple[str, str]:
+        subject = f"Payslip - {gym_name} - {payroll.pay_period_start} to {payroll.pay_period_end}"
+        note = payroll.other_deductions_note or "No reason provided"
+        body = f"""
+        <html><body style="margin:0;background:#07111f;color:#edf6ff;font-family:Arial,Helvetica,sans-serif;padding:32px 16px;">
+            <div style="max-width:620px;margin:auto;background:#0f172a;border:1px solid #334155;border-radius:18px;overflow:hidden;">
+                <div style="padding:24px 28px;background:linear-gradient(135deg,#0e7490,#164e63);">
+                    <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:#cffafe;">Salary released</div>
+                    <h1 style="margin:8px 0 0;font-size:28px;color:#fff;">{gym_name}</h1>
+                </div>
+                <div style="padding:28px;">
+                    <p>Hi {staff_email}, your salary has been marked as released.</p>
+                    <div style="padding:18px;border:1px solid #334155;border-radius:12px;background:#111827;line-height:1.8;">
+                        <div><strong>Pay period:</strong> {payroll.pay_period_start} - {payroll.pay_period_end}</div>
+                        <div><strong>Gross salary:</strong> Rs. {payroll.gross_amount}</div>
+                        <div><strong>Unpaid leave:</strong> {payroll.leave_days_unpaid} days (deduction: Rs. {payroll.leave_deduction_amount})</div>
+                        <div><strong>Leave deduction note:</strong> {payroll.leave_deduction_override_note or "Automatic calculation"}</div>
+                        <div><strong>Other deductions:</strong> Rs. {payroll.other_deductions} ({note})</div>
+                        <div style="margin-top:14px;font-size:22px;color:#67e8f9;"><strong>Net amount released: Rs. {payroll.net_amount}</strong></div>
+                    </div>
+                    <p style="color:#9eb4c8;margin-bottom:0;">This is a record of an external salary payment and is not a payment gateway transaction.</p>
+                </div>
+            </div>
+        </body></html>
+        """
+        return subject, body
+
+
 def build_staff_invitation_email(gym_name: str, email: str, password: str, role: str) -> tuple[str, str]:
         subject = f"You have been invited to {gym_name}"
         body = f"""
