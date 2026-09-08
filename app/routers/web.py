@@ -11,6 +11,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse, Stre
 from fastapi.templating import Jinja2Templates
 from jose import JWTError
 from PIL import Image
+from starlette.requests import ClientDisconnect
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -1643,7 +1644,10 @@ async def recognize_attendance_web(request: Request, db: Session = Depends(get_d
     if redirect:
         return JSONResponse({"status": "unauthorized", "detail": "Login required"}, status_code=401)
 
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except ClientDisconnect:
+        return JSONResponse({"status": "disconnected"}, status_code=499)
     image_data = payload.get("image", "") if isinstance(payload, dict) else ""
     if not image_data:
         return JSONResponse({"status": "error", "detail": "No image data provided"}, status_code=400)

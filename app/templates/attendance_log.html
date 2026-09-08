@@ -70,6 +70,8 @@
   const ctx = scannerCanvas.getContext('2d');
   let faceScanStream = null;
   let scanTimer = null;
+  let scanInFlight = false;
+  let scanController = null;
 
   function setScannerStatus(message, isError = false) {
     scannerStatus.textContent = message;
@@ -77,16 +79,23 @@
   }
 
   async function captureAndRecognize() {
-    if (!scannerVideo || !scannerVideo.videoWidth) return;
+    if (scanInFlight || !faceScanStream || !scannerVideo) return;
+    if (!scannerVideo.videoWidth) {
+      scanTimer = setTimeout(captureAndRecognize, 200);
+      return;
+    }
+    scanInFlight = true;
     ctx.drawImage(scannerVideo, 0, 0, scannerCanvas.width, scannerCanvas.height);
     const image = scannerCanvas.toDataURL('image/jpeg', 0.8);
 
     try {
       setScannerStatus('Scanning face...');
+      scanController = new AbortController();
       const response = await fetch('/app/attendance/recognize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image })
+        body: JSON.stringify({ image }),
+        signal: scanController.signal,
       });
       const data = await response.json();
 
@@ -112,7 +121,15 @@
         setScannerStatus(data.detail || 'Could not process face scan.', true);
       }
     } catch (error) {
-      setScannerStatus('Camera scan failed. Please try again.', true);
+      if (error.name !== 'AbortError') {
+        setScannerStatus('Camera scan failed. Please try again.', true);
+      }
+    } finally {
+      scanController = null;
+      scanInFlight = false;
+      if (faceScanStream) {
+        scanTimer = setTimeout(captureAndRecognize, 2000);
+      }
     }
   }
 
@@ -134,7 +151,7 @@
       scannerVideo.srcObject = faceScanStream;
       scannerVideo.play();
       setScannerStatus('Camera ready. Scanning for faces...');
-      scanTimer = setInterval(captureAndRecognize, 2000);
+      captureAndRecognize();
     } catch (error) {
       setScannerStatus('Could not access the camera. Please allow camera permission.', true);
     }
@@ -142,9 +159,16 @@
 
   function stopScanner() {
     if (scanTimer) {
-      clearInterval(scanTimer);
+      clearTimeout(scanTimer);
       scanTimer = null;
     }
+
+    if (scanController) {
+      scanController.abort();
+      scanController = null;
+    }
+
+    scanInFlight = false;
 
     if (faceScanStream) {
       faceScanStream.getTracks().forEach(track => track.stop());
