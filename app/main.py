@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.core.database import Base, SessionLocal, engine
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 from app.core.email import send_email
 from app.core.security import hash_password
 from app.core.security import decode_access_token
@@ -39,11 +39,28 @@ def ensure_database_schema() -> None:
     inspector = inspect(engine)
     required_tables = {"users", "expenses", "payroll_records", "staff_leaves"}
     missing_tables = required_tables.difference(inspector.get_table_names())
-    if not missing_tables:
+    if missing_tables:
+        print(f"Database schema is missing tables {sorted(missing_tables)}; initializing SQLAlchemy tables as a startup fallback")
+        Base.metadata.create_all(bind=engine)
+
+    inspector = inspect(engine)
+    user_columns = {column["name"] for column in inspector.get_columns("users")} if inspector.has_table("users") else set()
+    missing_user_columns = {"salary_rate", "salary_frequency", "salary_start_date"}.difference(user_columns)
+    if not missing_user_columns:
         return
 
-    print(f"Database schema is missing tables {sorted(missing_tables)}; initializing SQLAlchemy tables as a startup fallback")
-    Base.metadata.create_all(bind=engine)
+    print(f"User schema is missing columns {sorted(missing_user_columns)}; applying startup compatibility additions")
+    salary_columns = {
+        "salary_rate": "NUMERIC(10, 2)",
+        "salary_start_date": "DATE",
+    }
+    if engine.dialect.name == "postgresql":
+        salary_columns["salary_frequency"] = "payfrequency"
+    else:
+        salary_columns["salary_frequency"] = "VARCHAR(20)"
+    with engine.begin() as connection:
+        for column_name in missing_user_columns:
+            connection.execute(text(f"ALTER TABLE users ADD COLUMN {column_name} {salary_columns[column_name]}"))
 
 
 def ensure_default_superadmin() -> None:
