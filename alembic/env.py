@@ -15,7 +15,7 @@ from app.core.config import settings
 from app.core.database import Base
 from app.models import activity_log, app_setting, attendance, gym, gym_class, inquiry
 from app.models import member, payment, platform_plan, support, user, user_permission
-from app.models import expense, payroll
+from app.models import expense, payroll, user
 from app.models import staff_leave
 
 # this is the Alembic Config object, which provides

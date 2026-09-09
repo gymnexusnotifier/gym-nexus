@@ -1632,6 +1632,49 @@ def activity_history_page(request: Request, db: Session = Depends(get_db)):
     })
 
 
+@router.get("/app/financial-report", response_class=HTMLResponse)
+def financial_report_page(
+    request: Request, period: str = "month", start_date: date = None, end_date: date = None,
+    group_by: str = "month", activity_action: str = "", db: Session = Depends(get_db),
+):
+    user, redirect = _require_gym_user(request, db)
+    if redirect or user.role != UserRole.GYM_OWNER:
+        return redirect or RedirectResponse("/app/dashboard", status_code=303)
+    today = date.today()
+    if period == "year":
+        start_date, end_date = today.replace(month=1, day=1), today
+    elif period == "custom" and start_date and end_date:
+        pass
+    else:
+        period = "month"
+        start_date, end_date = today.replace(day=1), today
+    payroll_rows = db.query(PayrollRecord).filter(PayrollRecord.gym_id == user.gym_id, PayrollRecord.status == PayrollStatus.RELEASED, PayrollRecord.deleted_at.is_(None), PayrollRecord.released_date >= start_date, PayrollRecord.released_date <= end_date).all()
+    expense_rows = db.query(Expense).filter(Expense.gym_id == user.gym_id, Expense.deleted_at.is_(None), Expense.date >= start_date, Expense.date <= end_date).all()
+    income_rows = db.query(Payment).filter(Payment.gym_id == user.gym_id, Payment.payment_date >= start_date, Payment.payment_date <= end_date).all()
+    staff_by_id = {str(item.id): item.email for item in db.query(User).filter(User.gym_id == user.gym_id).all()}
+    rows = []
+    for item in income_rows:
+        rows.append({"date": item.payment_date, "kind": "Income", "group": "income", "description": f"Member payment", "amount": item.amount})
+    for item in payroll_rows:
+        rows.append({"date": item.released_date, "kind": "Payroll", "group": "payroll", "description": f"Salary: {staff_by_id.get(str(item.staff_id), str(item.staff_id))}", "amount": item.net_amount})
+    for item in expense_rows:
+        rows.append({"date": item.date, "kind": "Expense", "group": item.category.value, "description": item.description, "amount": item.amount})
+    grouped = {}
+    for row in rows:
+        key = row["date"].strftime("%Y") if group_by == "year" else row["date"].strftime("%Y-%m") if group_by == "month" else row["group"]
+        bucket = grouped.setdefault(key, {"key": key, "income": 0, "payroll": 0, "expenses": 0, "total": 0})
+        if row["kind"] == "Income": bucket["income"] += row["amount"]
+        elif row["kind"] == "Payroll": bucket["payroll"] += row["amount"]
+        else: bucket["expenses"] += row["amount"]
+        bucket["total"] = bucket["payroll"] + bucket["expenses"]
+    logs_query = db.query(ActivityLog).filter(ActivityLog.gym_id == user.gym_id, ActivityLog.created_at >= datetime.combine(start_date, datetime.min.time()), ActivityLog.created_at <= datetime.combine(end_date, datetime.max.time()))
+    if activity_action:
+        logs_query = logs_query.filter(ActivityLog.action == activity_action)
+    logs = logs_query.order_by(ActivityLog.created_at.desc()).limit(500).all()
+    actors = {str(actor.id): actor.email for actor in db.query(User).filter(User.gym_id == user.gym_id).all()}
+    return templates.TemplateResponse(request, "financial_report.html", {"active_nav": "payroll", "gym_name": user.gym.name if user.gym else "Gym Console", "user_role": user.role.value, "period": period, "group_by": group_by, "start_date": start_date, "end_date": end_date, "rows": sorted(rows, key=lambda item: item["date"], reverse=True), "grouped": sorted(grouped.values(), key=lambda item: item["key"], reverse=True), "total_income": sum((item.amount for item in income_rows), 0), "total_payroll": sum((item.net_amount for item in payroll_rows), 0), "total_expenses": sum((item.amount for item in expense_rows), 0), "logs": logs, "actors": actors, "activity_actions": sorted({item.action for item in db.query(ActivityLog).filter(ActivityLog.gym_id == user.gym_id).all()}), "activity_action": activity_action})
+
+
 @router.post("/app/staff/{staff_id}/remove")
 def remove_staff_web(staff_id: str, request: Request, db: Session = Depends(get_db)):
     user, redirect = _require_gym_user(request, db)
@@ -1683,6 +1726,26 @@ def payroll_page(
     payroll_total = sum((record.net_amount for record in records if record.status == PayrollStatus.RELEASED and record.released_date and record.released_date >= month_start), 0)
     expense_total = sum((expense.amount for expense in expenses if expense.date >= month_start), 0)
     staff_by_id = {str(member.id): member for member in staff}
+    suggestions = []
+    for member in staff:
+        if not member.salary_rate or not member.salary_frequency:
+            continue
+        last = db.query(PayrollRecord).filter(
+            PayrollRecord.gym_id == user.gym_id, PayrollRecord.staff_id == member.id,
+            PayrollRecord.deleted_at.is_(None), PayrollRecord.status == PayrollStatus.RELEASED,
+        ).order_by(PayrollRecord.pay_period_end.desc()).first()
+        period_start = (last.pay_period_end + timedelta(days=1)) if last else (member.salary_start_date or date.today().replace(day=1))
+        if member.salary_frequency == PayFrequency.WEEKLY:
+            period_end = period_start + timedelta(days=6)
+            days = 7
+        elif member.salary_frequency == PayFrequency.PER_SESSION:
+            period_end = period_start
+            days = 1
+        else:
+            period_end = date(period_start.year + (period_start.month == 12), 1 if period_start.month == 12 else period_start.month + 1, 1) - timedelta(days=1)
+            days = (period_end - period_start).days + 1
+        if period_end >= date.today() or not last:
+            suggestions.append({"staff": member, "start": period_start, "end": period_end, "days": days, "rate": member.salary_rate, "frequency": member.salary_frequency.value})
     return templates.TemplateResponse(request, "payroll.html", {
         "user": user, "user_role": user.role.value, "gym_name": user.gym.name if user.gym else "Your gym",
         "active_nav": "payroll", "staff": staff, "staff_by_id": staff_by_id, "records": records,
@@ -1690,8 +1753,28 @@ def payroll_page(
         "frequencies": [item.value for item in PayFrequency], "selected_category": category,
         "start_date": start_date, "end_date": end_date, "payroll_total": payroll_total,
         "expense_total": expense_total, "combined_total": payroll_total + expense_total,
-        "error": error, "success": success,
+        "error": error, "success": success, "suggestions": suggestions,
     })
+
+
+@router.post("/app/payroll/salary-settings")
+def save_salary_settings_web(
+    request: Request,
+    staff_id: str = Form(...), salary_rate: float = Form(...), salary_frequency: str = Form(...), salary_start_date: date = Form(...),
+    db: Session = Depends(get_db),
+):
+    user, redirect = _require_gym_user(request, db)
+    if redirect or user.role != UserRole.GYM_OWNER:
+        return redirect or RedirectResponse("/app/dashboard", status_code=303)
+    staff = db.query(User).filter(User.id == uuid.UUID(staff_id), User.gym_id == user.gym_id, User.role.in_([UserRole.STAFF, UserRole.TRAINER])).first()
+    if not staff or salary_rate <= 0:
+        return RedirectResponse("/app/payroll?error=Invalid+salary+settings", status_code=303)
+    staff.salary_rate = salary_rate
+    staff.salary_frequency = PayFrequency(salary_frequency)
+    staff.salary_start_date = salary_start_date
+    _log_activity(db, user, "salary_settings_updated", f"Updated salary suggestion for {staff.email}")
+    db.commit()
+    return RedirectResponse("/app/payroll?success=Salary+suggestion+saved", status_code=303)
 
 
 @router.post("/app/payroll")
@@ -1734,22 +1817,41 @@ def create_payroll_web(
             leave_deduction_overridden=bool(leave_deduction_amount.strip()),
             leave_deduction_override_note=leave_deduction_override_note.strip() or None,
             other_deductions=other_deductions, other_deductions_note=other_deductions_note.strip() or None,
-            gross_amount=pay_rate, net_amount=net_amount, status=PayrollStatus.RELEASED, released_date=date.today(),
+            gross_amount=pay_rate, net_amount=net_amount, status=PayrollStatus.PENDING,
         )
         db.add(record)
         _log_activity(db, user, "payroll_released", f"Released Rs. {net_amount} to {staff.email}")
         db.commit()
         db.refresh(record)
-        gym = db.query(Gym).filter(Gym.id == user.gym_id).first()
-        subject, body = build_payslip_email(gym.name if gym else "Your gym", staff.email, record)
-        pdf = generate_payslip_pdf(gym.name if gym else "Gym", staff.email, record)
-        if send_email(staff.email, subject, body, is_html=True, attachments=[(f"payslip_{str(record.id)[:8]}.pdf", pdf.read(), "application/pdf")]):
-            record.payslip_sent_at = datetime.utcnow()
-            db.commit()
-        return RedirectResponse("/app/payroll?success=Salary+released+and+payslip+sent", status_code=303)
+        return RedirectResponse("/app/payroll?success=Salary+prepared.+Mark+it+paid+after+the+external+transfer", status_code=303)
     except (ValueError, TypeError):
         db.rollback()
         return RedirectResponse("/app/payroll?error=Invalid+salary+details+or+overlapping+period", status_code=303)
+
+
+@router.post("/app/payroll/{payroll_id}/release")
+def release_payroll_web(payroll_id: str, request: Request, db: Session = Depends(get_db)):
+    user, redirect = _require_gym_user(request, db)
+    if redirect or user.role != UserRole.GYM_OWNER:
+        return redirect or RedirectResponse("/app/dashboard", status_code=303)
+    try:
+        record = db.query(PayrollRecord).filter(PayrollRecord.id == uuid.UUID(payroll_id), PayrollRecord.gym_id == user.gym_id, PayrollRecord.deleted_at.is_(None)).first()
+    except ValueError:
+        record = None
+    staff = db.query(User).filter(User.id == record.staff_id, User.gym_id == user.gym_id).first() if record else None
+    if not record or not staff or record.status != PayrollStatus.PENDING:
+        return RedirectResponse("/app/payroll?error=Pending+salary+not+found", status_code=303)
+    record.status = PayrollStatus.RELEASED
+    record.released_date = date.today()
+    _log_activity(db, user, "payroll_released", f"Marked Rs. {record.net_amount} paid to {staff.email}")
+    db.commit()
+    gym = db.query(Gym).filter(Gym.id == user.gym_id).first()
+    subject, body = build_payslip_email(gym.name if gym else "Your gym", staff.email, record)
+    pdf = generate_payslip_pdf(gym.name if gym else "Gym", staff.email, record)
+    if send_email(staff.email, subject, body, is_html=True, attachments=[(f"payslip_{str(record.id)[:8]}.pdf", pdf.read(), "application/pdf")]):
+        record.payslip_sent_at = datetime.utcnow()
+        db.commit()
+    return RedirectResponse("/app/payroll?success=Salary+marked+paid+and+payslip+sent", status_code=303)
 
 
 @router.post("/app/payroll/expenses")

@@ -26,6 +26,7 @@
         {% if user_role == "gym_owner" %}
         <a href="/app/staff" class="{{ 'active' if active_nav == 'staff' else '' }}">Staff</a>
         <a href="/app/payroll" class="{{ 'active' if active_nav == 'payroll' else '' }}">Payroll &amp; Expenses</a>
+        <a href="/app/financial-report" class="{{ 'active' if active_nav == 'financial_report' else '' }}">Finance &amp; Activity report</a>
         <a href="/app/support" class="{{ 'active' if active_nav == 'support' else '' }}">Support</a>
         {% endif %}
         {% if user_role == "trainer" %}
