@@ -90,6 +90,19 @@
     </tbody>
   </table>
 </section>
+<section class="panels">
+  <div class="panel">
+    <h2>Platform revenue trend <span class="tag">six months</span></h2>
+    <div class="bar-chart">
+      {% for item in platform_analytics.revenue %}<div class="bar-col"><div class="bar" style="height: {{ item.pct }}%" title="Rs. {{ '%.0f'|format(item.amount) }}"></div><div class="bar-label mono">{{ item.label }}</div></div>{% endfor %}
+    </div>
+  </div>
+  <div class="panel">
+    <h2>Subscription signals <span class="tag ai-tag">superadmin</span></h2>
+    {% set max_status = platform_analytics.status_counts|map(attribute='value')|max|default(1, true) %}
+    {% for item in platform_analytics.status_counts %}<div style="display:grid;grid-template-columns:90px 1fr 36px;gap:10px;align-items:center;margin:10px 0;"><span class="risk-reason">{{ item.label }}</span><div style="height:8px;background:var(--border);border-radius:4px;"><div style="height:100%;width:{{ (item.value / max_status * 100)|round|int }}%;background:var(--accent);border-radius:4px;"></div></div><span class="mono">{{ item.value }}</span></div>{% endfor %}
+  </div>
+</section>
 {% endif %}
 
 <section class="panels">

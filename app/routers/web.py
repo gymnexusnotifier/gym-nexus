@@ -38,6 +38,7 @@ from app.models.user_permission import UserPermission
 from app.services.ai_insights import build_ai_snapshot
 from app.services.chatbot import ask_chatbot, suggested_questions
 from app.services.churn import compute_churn_risk
+from app.services.analytics import build_gym_analytics
 from app.services.face_engine import FaceRecognitionService
 from app.services.receipt import generate_receipt_pdf, generate_payslip_pdf, generate_expense_summary_pdf
 from app.routers.leave import count_unpaid_leave_days
@@ -381,11 +382,11 @@ def dashboard_page(request: Request, db: Session = Depends(get_db)):
             continue
 
     active = db.query(Member).filter(Member.gym_id == gym_id, Member.status == MemberStatus.ACTIVE).all()
+    analytics = build_gym_analytics(db, gym_id, today)
     at_risk = []
-    for m in active:
-        risk = compute_churn_risk(db, gym_id, m)
-        if risk["risk_level"] in ("medium", "high"):
-            at_risk.append({"name": m.name, "level": risk["risk_level"], "reason": risk["reason"]})
+    for risk in analytics["churn"]:
+        if risk["level"] in ("medium", "high"):
+            at_risk.append({"name": risk["name"], "level": risk["level"], "score": risk["score"], "reason": risk["reason"]})
 
     at_risk.sort(key=lambda r: {"high": 2, "medium": 1}.get(r["level"], 0), reverse=True)
 
@@ -468,6 +469,7 @@ def dashboard_page(request: Request, db: Session = Depends(get_db)):
         "followups_due_today": followups_due_today,
         "due_inquiries": due_list,
         "ai_metrics": ai_metrics,
+        "analytics": analytics,
         "busiest_hour": busiest_hour,
         "quietest_hour": quietest_hour,
         "average_visit_minutes": round(sum(visit_durations) / len(visit_durations)) if visit_durations else None,
@@ -2406,6 +2408,21 @@ def superadmin_dashboard(
         "cancelled": sum(1 for gym in gyms if gym.subscription_status == "cancelled"),
         "past_due": sum(1 for gym in gyms if gym.subscription_status == "past_due"),
     }
+    platform_revenue = []
+    for offset in range(5, -1, -1):
+        first = (date.today().replace(day=1) - timedelta(days=offset * 30)).replace(day=1)
+        next_month = (first + timedelta(days=32)).replace(day=1)
+        amount = db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(
+            Payment.payment_date >= first, Payment.payment_date < next_month
+        ).scalar() or 0
+        platform_revenue.append({"label": first.strftime("%b"), "amount": float(amount)})
+    max_platform_revenue = max((item["amount"] for item in platform_revenue), default=1) or 1
+    for item in platform_revenue:
+        item["pct"] = round(item["amount"] / max_platform_revenue * 100)
+    platform_analytics = {
+        "revenue": platform_revenue,
+        "status_counts": [{"label": label.replace("_", " ").title(), "value": value} for label, value in status_counts.items()],
+    }
     valid_sections = {"overview", "analytics", "gyms", "plans", "settings"}
     active_section = section if section in valid_sections else "overview"
     edit_gym_id = edit_gym if any(str(g.id) == edit_gym for g in gyms) else ""
@@ -2440,6 +2457,7 @@ def superadmin_dashboard(
         "plans": plans,
         "plan_rows": plan_rows,
         "status_counts": status_counts,
+        "platform_analytics": platform_analytics,
         "error": error,
         "success": success,
         "user_role": user.role.value,

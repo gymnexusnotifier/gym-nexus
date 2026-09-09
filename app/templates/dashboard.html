@@ -2,12 +2,12 @@
 {% block content %}
 <header class="page-header">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;">
-    <div><h1>AI Insights</h1><p class="page-sub">{{ gym_name }} &middot; decision support for your next move</p></div>
-    <a href="/app/dashboard/report" class="receipt-link">Download report</a>
+    <div><div class="eyebrow" style="margin-bottom:8px;">NEXUS INTELLIGENCE / OVERVIEW</div><h1>Command center</h1><p class="page-sub">{{ gym_name }} &middot; decision support for your next move</p></div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span class="tag ai-tag">● systems nominal</span><a href="/app/dashboard/report" class="primary-action" style="text-decoration:none;display:inline-flex;align-items:center;">Download report</a></div>
   </div>
 </header>
 
-<section class="stat-grid">
+<section class="stat-grid dashboard-kpis">
   <div class="stat-card">
     <div class="stat-label">Today's check-ins</div>
     <div class="stat-value mono">{{ today_checkins }}</div>
@@ -43,7 +43,7 @@
   </div>
 </section>
 
-<section class="panels">
+<section class="panels" id="insights">
   <div class="panel">
     <h2>Traffic by time <span class="tag">last 30 days</span></h2>
     {% if peak_hours %}
@@ -71,7 +71,7 @@
       <ul class="risk-list">
         {% for m in at_risk %}
           <li>
-            <span class="risk-pill risk-{{ m.level }}">{{ m.level }}</span>
+            <span class="risk-pill risk-{{ m.level }}">{{ m.score }}/100</span>
             <div>
               <div class="risk-name">{{ m.name }}</div>
               <div class="risk-reason">{{ m.reason }}</div>
@@ -82,6 +82,62 @@
     {% else %}
       <p class="empty">No members currently flagged at risk.</p>
     {% endif %}
+  </div>
+</section>
+
+<section class="panels">
+  <div class="panel">
+    <h2>Retention radar <span class="tag ai-tag">churn score</span></h2>
+    {% set scored = analytics.churn|selectattr('score', 'ge', 30)|list %}
+    {% if scored %}
+      <ul class="risk-list">
+        {% for member in scored[:6] %}
+        <li><span class="risk-pill risk-{{ member.level }}">{{ member.score }}</span><div><div class="risk-name">{{ member.name }}</div><div class="risk-reason">{{ member.reason }}</div></div></li>
+        {% endfor %}
+      </ul>
+    {% else %}<p class="empty">No attendance decline signals are active.</p>{% endif %}
+  </div>
+  <div class="panel">
+    <h2>Renewal forecast <span class="tag">next 30 days</span></h2>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">Expected revenue</div><div class="stat-value mono">Rs. {{ "%.0f"|format(analytics.revenue.expected) }}</div></div>
+      <div class="stat-card"><div class="stat-label">Historical renewal rate</div><div class="stat-value mono">{{ analytics.revenue.renewal_rate }}%</div></div>
+    </div>
+    {% if analytics.revenue.expiring %}<p class="risk-reason" style="margin-top:14px;">{{ analytics.revenue.due_count }} memberships expire soon. Prioritize: {{ analytics.revenue.expiring[0].name }}.</p>{% else %}<p class="empty">No memberships are due in the next 30 days.</p>{% endif %}
+  </div>
+</section>
+
+<section class="panels">
+  <div class="panel">
+    <h2>Weekly traffic <span class="tag">last 90 days</span></h2>
+    <div class="bar-chart">
+      {% set max_day = analytics.traffic.days|map(attribute='value')|max|default(1, true) %}
+      {% for day in analytics.traffic.days %}<div class="bar-col"><div class="bar" style="height: {{ (day.value / max_day * 100)|round|int }}%" title="{{ day.value }} visits"></div><div class="bar-label mono">{{ day.label }}</div></div>{% endfor %}
+    </div>
+    <p class="risk-reason" style="margin-top:14px;">Busiest day: <strong>{{ analytics.traffic.busiest_day or '—' }}</strong> · busiest hour: <strong>{{ analytics.traffic.busiest_hour if analytics.traffic.busiest_hour is not none else '—' }}{% if analytics.traffic.busiest_hour is not none %}:00{% endif %}</strong></p>
+  </div>
+  <div class="panel">
+    <h2>Growth and margin <span class="tag">owner signals</span></h2>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-label">Cost / active member</div><div class="stat-value mono">Rs. {{ "%.0f"|format(analytics.expenses.cost_per_member) }}</div></div>
+      <div class="stat-card"><div class="stat-label">Inquiry conversion</div><div class="stat-value mono">{{ analytics.inquiries.conversion_rate }}%</div></div>
+    </div>
+    {% if analytics.expenses.categories %}<p class="risk-reason" style="margin-top:14px;">Fastest-growing cost: <strong>{{ analytics.expenses.categories[0].name }}</strong>{% if analytics.expenses.categories[0].growth is not none %} ({{ analytics.expenses.categories[0].growth }}%){% endif %}</p>{% endif %}
+    {% if analytics.inquiries.cold %}<p class="risk-reason">AI follow-up reminder: {{ analytics.inquiries.cold|length }} inquiry(ies) have gone cold.</p>{% endif %}
+  </div>
+</section>
+
+<section class="panels">
+  <div class="panel">
+    <h2>Class and trainer performance <span class="tag">bookings and retention</span></h2>
+    {% if analytics.classes.classes %}<table class="data-table"><thead><tr><th>Class</th><th>Bookings</th><th>Trend</th></tr></thead><tbody>{% for item in analytics.classes.classes[:5] %}<tr><td>{{ item.name }}</td><td class="mono">{{ item.attendance }}</td><td><span class="status-pill status-{{ 'active' if item.trend == 'up' else 'expired' if item.trend == 'down' else 'frozen' }}">{{ item.trend }}</span></td></tr>{% endfor %}</tbody></table>{% else %}<p class="empty">Class booking data will appear here as members book sessions.</p>{% endif %}
+    {% if analytics.classes.trainers %}<div style="margin-top:16px;"><div class="stat-label">Trainer retention</div>{% for trainer in analytics.classes.trainers[:4] %}<div class="risk-reason" style="display:flex;justify-content:space-between;margin-top:8px;"><span>{{ trainer.name }}</span><strong>{{ trainer.retention }}%</strong></div>{% endfor %}</div>{% endif %}
+  </div>
+  <div class="panel">
+    <h2>Recommendations & anomalies <span class="tag ai-tag">action queue</span></h2>
+    {% for item in analytics.recommendations[:4] %}<div class="risk-reason" style="margin-bottom:8px;"><strong>{{ item.name }}</strong> · {{ item.suggestion }}</div>{% endfor %}
+    {% for anomaly in analytics.anomalies %}<div class="risk-reason" style="color:var(--risk-high);margin-top:10px;">{{ anomaly }}</div>{% endfor %}
+    {% if not analytics.recommendations and not analytics.anomalies %}<p class="empty">No new recommendations or anomalies detected.</p>{% endif %}
   </div>
 </section>
 

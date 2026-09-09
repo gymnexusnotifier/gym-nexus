@@ -8,43 +8,71 @@
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body>
+<body data-theme="dark">
   <div class="shell">
     <aside class="sidebar">
       <div class="brand">
-        <span class="brand-mark">&#9679;</span>
+        <span class="brand-mark">N</span>
         <span class="brand-name">{{ gym_name or "GYM-NEXUS" }}</span>
+        <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="Collapse navigation" title="Collapse navigation">&#8592;</button>
       </div>
       <nav class="nav">
-        {% if request.state.permissions.dashboard %}<a href="/app/dashboard" class="{{ 'active' if active_nav == 'dashboard' else '' }}">Dashboard</a>{% endif %}
-        {% if request.state.permissions.members %}<a href="/app/members" class="{{ 'active' if active_nav == 'members' else '' }}">Members</a>{% endif %}
-        {% if request.state.permissions.members %}<a href="/app/plans" class="{{ 'active' if active_nav == 'plans' else '' }}">Plans</a>{% endif %}
-        {% if request.state.permissions.payments %}<a href="/app/payments" class="{{ 'active' if active_nav == 'payments' else '' }}">Payments</a>{% endif %}
-        {% if request.state.permissions.classes %}<a href="/app/classes" class="{{ 'active' if active_nav == 'classes' else '' }}">Classes</a>{% endif %}
-        {% if request.state.permissions.attendance %}<a href="/app/attendance" class="{{ 'active' if active_nav == 'attendance' else '' }}">Attendance</a>{% endif %}
-        {% if request.state.permissions.inquiries %}<a href="/app/inquiries" class="{{ 'active' if active_nav == 'inquiries' else '' }}">Inquiries</a>{% endif %}
+        <div class="nav-group"><div class="nav-label">Overview</div>
+          {% if request.state.permissions.dashboard %}<a data-icon="⌂" href="/app/dashboard" class="{{ 'active' if active_nav == 'dashboard' else '' }}">Dashboard</a>{% endif %}
+        </div>
+        <div class="nav-group"><div class="nav-label">People</div>
+          {% if request.state.permissions.members %}<a data-icon="◉" href="/app/members" class="{{ 'active' if active_nav == 'members' else '' }}">Members</a>{% endif %}
+          {% if request.state.permissions.members %}<a data-icon="◇" href="/app/plans" class="{{ 'active' if active_nav == 'plans' else '' }}">Plans</a>{% endif %}
+          {% if request.state.permissions.inquiries %}<a data-icon="↗" href="/app/inquiries" class="{{ 'active' if active_nav == 'inquiries' else '' }}">Inquiries</a>{% endif %}
+          {% if user_role == "gym_owner" %}<a data-icon="✦" href="/app/staff" class="{{ 'active' if active_nav == 'staff' else '' }}">Staff</a>{% endif %}
+        </div>
+        <div class="nav-group"><div class="nav-label">Operations</div>
+          {% if request.state.permissions.attendance %}<a data-icon="◌" href="/app/attendance" class="{{ 'active' if active_nav == 'attendance' else '' }}">Attendance</a>{% endif %}
+          {% if request.state.permissions.classes %}<a data-icon="▦" href="/app/classes" class="{{ 'active' if active_nav == 'classes' else '' }}">Classes</a>{% endif %}
+          {% if request.state.permissions.notifications %}<a data-icon="◒" href="/app/notifications" class="{{ 'active' if active_nav == 'notifications' else '' }}">Notifications</a>{% endif %}
+        </div>
+        <div class="nav-group"><div class="nav-label">Finance</div>
+          {% if request.state.permissions.payments %}<a data-icon="$" href="/app/payments" class="{{ 'active' if active_nav == 'payments' else '' }}">Payments</a>{% endif %}
+          {% if user_role == "gym_owner" %}<a data-icon="∿" href="/app/payroll" class="{{ 'active' if active_nav == 'payroll' else '' }}">Payroll &amp; Expenses</a>{% endif %}
+          <a data-icon="◫" href="/app/billing" class="{{ 'active' if active_nav == 'billing' else '' }}">Billing</a>
+        </div>
+        <div class="nav-group"><div class="nav-label">Insights</div>
+          {% if request.state.permissions.dashboard %}<a data-icon="✧" href="/app/dashboard#insights" class="{{ 'active' if active_nav == 'dashboard' else '' }}">AI Insights</a>{% endif %}
+        </div>
+        <div class="nav-group"><div class="nav-label">System</div>
         {% if user_role == "gym_owner" %}
-        <a href="/app/staff" class="{{ 'active' if active_nav == 'staff' else '' }}">Staff</a>
-        <a href="/app/payroll" class="{{ 'active' if active_nav == 'payroll' else '' }}">Payroll &amp; Expenses</a>
-        <a href="/app/financial-report" class="{{ 'active' if active_nav == 'financial_report' else '' }}">Finance &amp; Activity report</a>
-        <a href="/app/support" class="{{ 'active' if active_nav == 'support' else '' }}">Support</a>
+        <a data-icon="▤" href="/app/financial-report" class="{{ 'active' if active_nav == 'financial_report' else '' }}">Activity report</a>
+        <a data-icon="?" href="/app/support" class="{{ 'active' if active_nav == 'support' else '' }}">Support</a>
         {% endif %}
         {% if user_role == "trainer" %}
-        <a href="/app/trainer/schedule" class="{{ 'active' if active_nav == 'trainer_schedule' else '' }}">My Schedule</a>
+        <a data-icon="◷" href="/app/trainer/schedule" class="{{ 'active' if active_nav == 'trainer_schedule' else '' }}">My Schedule</a>
         {% endif %}
-        {% if request.state.permissions.notifications %}<a href="/app/notifications" class="{{ 'active' if active_nav == 'notifications' else '' }}">Notifications</a>{% endif %}
-        <a href="/app/billing" class="{{ 'active' if active_nav == 'billing' else '' }}">Billing</a>
         {% if user_role == "gym_owner" %}
-        <a href="/app/activity" class="{{ 'active' if active_nav == 'activity' else '' }}">Activity history</a>
+        <a data-icon="↺" href="/app/activity" class="{{ 'active' if active_nav == 'activity' else '' }}">Activity history</a>
         {% endif %}
+        </div>
       </nav>
-      <a href="/logout" class="logout-link">Log out</a>
+      <div class="sidebar-footer"><button type="button" class="theme-toggle" id="theme-toggle" title="Toggle light mode"><span>◐</span><span>Light mode</span></button><a href="/logout" class="logout-link">↗ <span>Log out</span></a></div>
     </aside>
     <main class="content">
+      <div class="mobile-topbar"><span class="eyebrow">GYM-NEXUS / {{ active_nav|default('workspace')|replace('_', ' ')|upper }}</span><button type="button" class="theme-toggle" id="mobile-theme-toggle" title="Toggle light mode">◐</button></div>
       {% block content %}{% endblock %}
     </main>
   </div>
   <script>
+    const shell = document.querySelector('.shell');
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const themeButtons = document.querySelectorAll('#theme-toggle, #mobile-theme-toggle');
+    if (localStorage.getItem('gym-nexus-sidebar') === 'collapsed') shell.classList.add('sidebar-collapsed');
+    if (localStorage.getItem('gym-nexus-theme') === 'light') document.body.dataset.theme = 'light';
+    sidebarToggle?.addEventListener('click', () => {
+      shell.classList.toggle('sidebar-collapsed');
+      localStorage.setItem('gym-nexus-sidebar', shell.classList.contains('sidebar-collapsed') ? 'collapsed' : 'expanded');
+    });
+    themeButtons.forEach((button) => button.addEventListener('click', () => {
+      document.body.dataset.theme = document.body.dataset.theme === 'light' ? 'dark' : 'light';
+      localStorage.setItem('gym-nexus-theme', document.body.dataset.theme);
+    }));
     document.querySelectorAll('.lookup-input').forEach((input) => {
       const target = document.getElementById(input.dataset.target);
       const list = document.getElementById(input.getAttribute('list'));
@@ -59,6 +87,53 @@
         syncValue();
         if (input.required && !target.value) event.preventDefault();
       });
+    });
+
+    document.querySelectorAll('.panel:has(.data-table)').forEach((panel) => {
+      const table = panel.querySelector('.data-table');
+      const body = table?.tBodies[0];
+      if (!table || !body || body.rows.length < 2) return;
+      const rows = Array.from(body.rows);
+      const controls = document.createElement('div');
+      controls.className = 'table-controls';
+      controls.innerHTML = '<input type="search" placeholder="Search records" aria-label="Search records"><span class="table-count"></span><div class="table-pages"></div>';
+      panel.insertBefore(controls, table);
+      const search = controls.querySelector('input');
+      const count = controls.querySelector('.table-count');
+      const pages = controls.querySelector('.table-pages');
+      const pageSize = 8;
+      let page = 1;
+      let filtered = rows;
+      const render = () => {
+        const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+        page = Math.min(page, pageCount);
+        rows.forEach((row) => { row.hidden = true; });
+        filtered.slice((page - 1) * pageSize, page * pageSize).forEach((row) => { row.hidden = false; });
+        count.textContent = `${filtered.length} record${filtered.length === 1 ? '' : 's'}`;
+        pages.innerHTML = pageCount > 1 ? `<button type="button" ${page === 1 ? 'disabled' : ''} data-page="${page - 1}">Prev</button><span>${page} / ${pageCount}</span><button type="button" ${page === pageCount ? 'disabled' : ''} data-page="${page + 1}">Next</button>` : '';
+        pages.querySelectorAll('button').forEach((button) => button.addEventListener('click', () => { page = Number(button.dataset.page); render(); }));
+      };
+      search.addEventListener('input', () => {
+        const query = search.value.trim().toLowerCase();
+        filtered = rows.filter((row) => row.textContent.toLowerCase().includes(query));
+        page = 1;
+        render();
+      });
+      table.querySelectorAll('th').forEach((header, index) => {
+        header.classList.add('sortable');
+        header.tabIndex = 0;
+        const sort = () => {
+          const direction = header.dataset.direction === 'asc' ? 'desc' : 'asc';
+          table.querySelectorAll('th').forEach((item) => delete item.dataset.direction);
+          header.dataset.direction = direction;
+          rows.sort((left, right) => left.cells[index].textContent.trim().localeCompare(right.cells[index].textContent.trim(), undefined, { numeric: true, sensitivity: 'base' }) * (direction === 'asc' ? 1 : -1));
+          filtered = rows;
+          render();
+        };
+        header.addEventListener('click', sort);
+        header.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') sort(); });
+      });
+      render();
     });
   </script>
 </body>
