@@ -37,10 +37,12 @@ def ensure_database_schema() -> None:
         return
 
     inspector = inspect(engine)
-    if inspector.has_table("users"):
+    required_tables = {"users", "expenses", "payroll_records", "staff_leaves"}
+    missing_tables = required_tables.difference(inspector.get_table_names())
+    if not missing_tables:
         return
 
-    print("Database schema is missing; initializing SQLAlchemy tables as a startup fallback")
+    print(f"Database schema is missing tables {sorted(missing_tables)}; initializing SQLAlchemy tables as a startup fallback")
     Base.metadata.create_all(bind=engine)
 
 
